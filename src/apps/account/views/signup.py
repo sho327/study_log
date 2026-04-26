@@ -1,0 +1,88 @@
+from datetime import datetime
+from django.utils import timezone
+from rest_framework.permissions import AllowAny
+from rest_framework.exceptions import ValidationError as DRF_ValidationError
+
+# --- コアモジュール ---
+from core.decorators.logging_process_with_sql import logging_process_with_sql
+from core.consts import LOG_METHOD
+from core.utils.log_helpers import log_output_by_msg_id
+from core.utils.date_format import convert_to_site_timezone
+from core.exceptions.exceptions import ApplicationError, ValidationError
+from core.views import BaseAPIView
+
+# --- アカウントモジュール ---
+from apps.account.serializer.signup import SignupRequestSerializer, SignupResponseSerializer
+from apps.account.services import AccountService
+
+
+KINO_ID = "signup"
+
+class SignupView(BaseAPIView):
+    """
+    新規登録処理APIクラス
+    Create
+        Author: Kato Shogo
+    """
+    permission_classes = [AllowAny]
+    account_service = AccountService()
+
+    @logging_process_with_sql
+    def post(self, request, *args, **kwargs):
+        """
+        POSTリクエストを受け付ける。
+        Method: POST
+        Args:
+            request:  HTTPリクエスト
+            *args:    引数
+            **kwargs: キーワード引数
+        Returns:
+            Response: HTTPレスポンス
+        Raises:
+            InternalServerError: 想定外エラー
+        Create
+            Author: Kato Shogo
+        """
+        try:
+            return self.signup(request, *args, **kwargs)
+        except ApplicationError:
+            # ApplicationError関連はカスタムエラー処理が設定されている為そのまま親へスローする
+            raise
+        except DRF_ValidationError as e:
+            # DRFバリデーションエラーは専用エラーに差し替える
+            raise ValidationError() from e
+        except Exception as e:
+            # その他想定外エラーの場合もAPIエラーとする
+            raise ApplicationError() from e
+    
+    def signup(self, request, *args, **kwargs):
+        """
+        サインアップ処理
+        Args:
+            request:  HTTPリクエスト
+            *args:    引数
+            **kwargs: キーワード引数
+        Create
+            Author: Kato Shogo
+        """
+        date_now: datetime = convert_to_site_timezone(timezone.now())
+        # 1. 処理開始ログ出力(アプリケーションログ)
+        log_output_by_msg_id(log_id="MSGI003", params=[KINO_ID, str(request.data)], logger_name=LOG_METHOD.APPLICATION.value)
+        # 2. リクエストデータ検証
+        serializer = SignupRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # 3. 新規登録(サービス実行)
+        self.account_service.signup(
+            date_now=date_now,
+            kino_id=KINO_ID, 
+            **serializer.validated_data,
+        )
+        # 4. レスポンス作成（ここがポイント）
+        # 空であってもResponseSerializerを通す/「このAPIが何を返すか」がViewの最後を見れば一目でわかるようにする
+        # data=Noneまたは空辞書を渡すことで、executeAtだけが入ったレスポンスとなる
+        res_serializer = SignupResponseSerializer({})
+        response = self.get_success_map_response(data=res_serializer.data)
+        # 4. 処理終了ログ出力(アプリケーションログ)
+        log_output_by_msg_id(log_id="MSGI004", params=[KINO_ID, str(response.data)], logger_name=LOG_METHOD.APPLICATION.value)
+        # 5. レスポンス返却
+        return response
