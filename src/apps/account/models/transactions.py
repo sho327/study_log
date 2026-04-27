@@ -193,14 +193,6 @@ class T_Profile(BaseModel):
         null=True,
         blank=True,
     )
-    # 所属
-    affiliation = models.TextField(
-        db_column="affiliation",
-        verbose_name="所属",
-        db_comment="所属",
-        null=True,
-        blank=True,
-    )
     # 自己紹介
     bio = models.TextField(
         db_column="bio",
@@ -210,13 +202,12 @@ class T_Profile(BaseModel):
         blank=True,
     )
     # アイコン(削除/物理削除の場合はCASCADE)
-    icon = models.ForeignKey(
-        "common.T_FileResource",
-        db_column="icon_id",
+    icon = models.ImageField(
+        db_column="icon",
         verbose_name="アイコン",
         db_comment="アイコン",
-        on_delete=models.CASCADE,
-        related_name="icon_t_profile_set",
+        upload_to="profiles/icons/",
+        max_length=255,
         null=True,
         blank=True,
     )

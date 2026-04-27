@@ -76,12 +76,13 @@ class T_FileResource(BaseModel):
         choices=FileType.choices,
         default=FileType.OTHER,
     )
-    # ファイルデータ
-    file_data = models.FileField(
-        db_column="file_data",
-        verbose_name="ファイルデータ",
-        db_comment="ファイルデータ",
+    # ファイル
+    file = models.FileField(
+        db_column="file",
+        verbose_name="ファイル",
+        db_comment="ファイル",
         upload_to="file_resource/%Y/%m/%d/",  # 開発時は MEDIA_ROOT/file_resource/ に保存される
+        max_length=255,
         null=True,
         blank=True,
     )
@@ -118,8 +119,8 @@ class T_FileResource(BaseModel):
         """
         if self.external_url:
             return self.external_url
-        if self.file_data:
-            return self.file_data.url
+        if self.file:
+            return self.file.url
         return None
 
     # django-simple-historyを使用
@@ -135,9 +136,16 @@ class T_FileResource(BaseModel):
             # 未削除のレコード内でのみ、外部リソースが重複しないことを保証
             UniqueConstraint(
                 fields=["external_url"],
-                # external_url が null でない場合のみチェック
+                # external_urlがnullでない場合のみチェック
                 condition=Q(deleted_at__isnull=True) & Q(external_url__isnull=False),
                 name="unique_t_file_resource_external_url_active",
+            ),
+            # 未削除のレコード内でのみ、ファイルが重複しないことを保証
+            UniqueConstraint(
+                fields=["file"],
+                # fileがnullでない場合のみチェック
+                condition=Q(deleted_at__isnull=True) & Q(file__isnull=False),
+                name="unique_t_file_resource_file_active",
             ),
         ]
 
