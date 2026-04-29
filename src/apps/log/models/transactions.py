@@ -9,6 +9,7 @@ from core.models import BaseModel
 # --- 共通モジュール ---
 from apps.common.models import AbstractAttachment
 
+
 # ログトラン
 class T_Log(BaseModel):
     # ---------- Consts ----------
@@ -89,6 +90,16 @@ class T_Log(BaseModel):
         null=True,
         blank=True,
     )
+    # リアクション
+    reactions = models.ManyToManyField(
+        "account.M_User",  # 循環参照対策(文字で定義することで、後での紐付けとする)
+        # ManyToManyFieldにはdb_columnは通常指定しない（中間テーブルで制御）
+        verbose_name="リアクション",
+        db_comment="リアクション",
+        through="log.R_LogReaction",  # 循環参照対策(文字で定義することで、後での紐付けとする)
+        # 逆参照名を定義(例: 「参照先インスタンス.[related_name]」/通常参照は「本インスタンス.参照先モデル名(_id)」で取得可能)
+        related_name="reactions_t_log_set",
+    )
 
     # 履歴管理不要: django-simple-historyを使用しない
     # history = HistoricalRecords()
@@ -154,16 +165,34 @@ class T_LogComment(BaseModel):
         null=True,
         blank=True,
     )
+    # リアクション
+    reactions = models.ManyToManyField(
+        "account.M_User",  # 循環参照対策(文字で定義することで、後での紐付けとする)
+        # ManyToManyFieldにはdb_columnは通常指定しない（中間テーブルで制御）
+        verbose_name="リアクション",
+        db_comment="リアクション",
+        through="log.R_LogCommentReaction",  # 循環参照対策(文字で定義することで、後での紐付けとする)
+        # 逆参照名を定義(例: 「参照先インスタンス.[related_name]」/通常参照は「本インスタンス.参照先モデル名(_id)」で取得可能)
+        related_name="reactions_t_log_comment_set",
+    )
 
     # django-simple-historyを使用
     history = HistoricalRecords()
 
     # テーブル名
     class Meta:
-        db_table = "t_notice_post_comment"
-        db_table_comment = "掲示板投稿コメントトラン"
-        verbose_name = "掲示板投稿コメントトラン"
-        verbose_name_plural = "掲示板投稿コメントトラン"
+        db_table = "t_log_comment"
+        db_table_comment = "ログコメントトラン"
+        verbose_name = "ログコメントトラン"
+        verbose_name_plural = "ログコメントトラン"
+        # constraints = [
+        #     # 未削除間でのみmemoをユニークにする
+        #     UniqueConstraint(
+        #         fields=["memo"],
+        #         condition=Q(deleted_at__isnull=True),
+        #         name="unique_t_log_memo_active",
+        #     ),
+        # ]
 
     def __str__(self):
         return f"{self.content}"
