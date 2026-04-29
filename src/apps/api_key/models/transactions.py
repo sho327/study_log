@@ -11,7 +11,15 @@ from core.models import BaseModel
 class T_ApiKey(BaseModel):
     # ---------- Consts ----------
     # ---------- Fields ----------
-    # ID (BIGINT PRIMARY KEY) はDjangoが自動で付与
+    # ID(URLに使用される可能性もあるため、予測できないUUIDで保持する)
+    id = models.UUIDField(
+        db_column="id",
+        verbose_name="ID",
+        db_comment="ID",
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
     # ユーザマスタ(削除/物理削除の場合はCASCADE)
     user = models.ForeignKey(
         "account.M_User",  # 循環参照対策(文字で定義することで、後での紐付けとする)

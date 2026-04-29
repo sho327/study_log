@@ -10,7 +10,7 @@ from simple_history.models import HistoricalRecords
 # --- 共通モジュール ---
 from core.models import BaseModel
 
-class T_AbstractAttachment(BaseModel):
+class AbstractAttachment(BaseModel):
     # ファイルリソース(削除/物理削除の場合はCASCADE)
     file_resource = models.ForeignKey(
         "common.T_FileResource",
@@ -32,20 +32,6 @@ class T_AbstractAttachment(BaseModel):
   
     class Meta:
         abstract = True
-
-# 例) 複数添付ファイルは下記のように抽象クラスを継承し定義する
-# class T_PostAttachment(T_AbstractAttachment):
-    # ファイルリソース(削除/物理削除の場合はCASCADE)
-    # file_resource = models.ForeignKey(
-    #     "post.T_Post",
-    #     db_column="file_resource_id",
-    #     verbose_name="ファイルリソース",
-    #     db_comment="ファイルリソース",
-    #     on_delete=models.CASCADE,
-    #     related_name="file_resource_t_post_attachement_set",
-    #     null=True,
-    #     blank=True,
-    # )
 
 # ファイルリソーストラン
 class T_FileResource(BaseModel):

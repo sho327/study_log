@@ -15,7 +15,15 @@ class T_UserToken(BaseModel):
         PASSWORD_RESET = "PR", "パスワードリセット"
         EMAIL_CHANGE = "EC", "メールアドレス変更確認"
     # ---------- Fields ----------
-    # ID (BIGINT PRIMARY KEY) はDjangoが自動で付与
+    # ID(URLに使用される可能性もあるため、予測できないUUIDで保持する)
+    id = models.UUIDField(
+        db_column="id",
+        verbose_name="ID",
+        db_comment="ID",
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
     # ユーザマスタ(削除/物理削除の場合はCASCADE)
     user = models.ForeignKey(
         "account.M_User",  # 循環参照対策(文字で定義することで、後での紐付けとする)
@@ -80,7 +88,15 @@ class T_LoginHistory(BaseModel):
         # MFA_FAILED = "MFA_FAILED", "2段階認証失敗"
 
     # ---------- Fields ----------
-    # ID (BIGINT PRIMARY KEY) はDjangoが自動で付与
+    # ID(URLに使用される可能性もあるため、予測できないUUIDで保持する)
+    id = models.UUIDField(
+        db_column="id",
+        verbose_name="ID",
+        db_comment="ID",
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
     # ユーザマスタ(削除/物理削除の場合はSET_NULL)
     user = models.ForeignKey(
         "account.M_User",  # 循環参照対策(文字で定義することで、後での紐付けとする)
