@@ -28,7 +28,7 @@ class T_ApiKey(BaseModel):
         db_comment="ユーザマスタ",
         on_delete=models.CASCADE,
         # 逆参照名を定義(例: 「参照先インスタンス.[related_name]」/通常参照は「本インスタンス.参照先モデル名(_id)」で取得可能)
-        related_name="user_t_user_token_set",
+        related_name="user_t_api_key_set",
     )
     # クライアントキー
     client_key = models.CharField(
