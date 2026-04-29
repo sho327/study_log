@@ -98,7 +98,7 @@ class T_ProfileAdmin(SimpleHistoryAdmin):
 
     fieldsets = (
         (None, {"fields": ("user", "user_id_display", "display_name")}),
-        ("詳細情報", {"fields": ("affiliation", "bio", "icon")}),
+        ("詳細情報", {"fields": ("bio", "icon")}),
         ("状態・設定", {"fields": ("status_code", "is_setup_completed", "locked_until_at")}),
         ("システム情報", {"fields": ("created_method", "updated_method", "created_at", "updated_at", "deleted_at")}),
     )

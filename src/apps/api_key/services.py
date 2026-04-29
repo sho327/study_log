@@ -1,9 +1,10 @@
 import secrets
-from datetime import datetime
-from typing import Optional, Tuple
+from datetime import datetime, timedelta
+from typing import Tuple
 
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
+from django.utils import timezone
 
 # --- アカウントモジュール ---
 from apps.account.models import M_User
@@ -101,6 +102,7 @@ class ApiKeyService:
         # secret_key: 32文字のランダム文字列
         client_key = secrets.token_hex(16)
         raw_secret = secrets.token_hex(16)
+        expired_at = timezone.now() + timedelta(days=validated_data["duration_days"])
         
         # 3. APIキー本体の作成
         api_key = T_ApiKey.objects.create(
@@ -109,8 +111,10 @@ class ApiKeyService:
             description=validated_data.get("description"),
             client_key=client_key,
             hashed_secret=make_password(raw_secret), # パスワードと同じ仕組みでハッシュ化
-            expired_at=validated_data["expired_at"],
-            is_active=validated_data.get("is_active", True),
+            expired_at=expired_at,
+            is_active=True,
+            revoked_reason=None,
+            revoked_detail=None,
             created_by=user,
             created_method=kino_id,
             updated_by=user,
@@ -169,12 +173,17 @@ class ApiKeyService:
         
         if "is_active" in validated_data:
             api_key.is_active = validated_data["is_active"]
-            # 無効化される場合は理由などをリセット（必要に応じてロジック追加）
+            # 無効化される場合は理由などを設定
             if not api_key.is_active:
-                api_key.revoked_at = date_now
+                api_key.revoked_reason = validated_data["revoked_reason"]
+                api_key.revoked_detail = validated_data["revoked_detail"]
+            # 有効化される場合は理由などをリセット
+            else:
+                api_key.revoked_reason = None
+                api_key.revoked_detail = None
         
-        if "expired_at" in validated_data:
-            api_key.expired_at = validated_data["expired_at"]
+        if "duration_days" in validated_data:
+            api_key.expired_at = timezone.now() + timedelta(days=validated_data["duration_days"])
 
         api_key.updated_by = user
         api_key.updated_method = kino_id

@@ -8,7 +8,7 @@ from core.models import BaseModel
 
 
 # APIキースコープマスタ
-class M_ApiKeyScope(models.Model):
+class M_ApiKeyScope(BaseModel):
     # ---------- Consts ----------
     # ---------- Fields ----------
     # ID(URLに使用される可能性もあるため、予測できないUUIDで保持する)

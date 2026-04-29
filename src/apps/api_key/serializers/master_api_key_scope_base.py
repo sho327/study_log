@@ -21,7 +21,7 @@ class MasterApiKeyScopeMiniResponseSerializer(MasterApiKeyScopeBaseSerializer):
         fields = [
             "id",  
             "code", 
-            "name"
+            "name",
         ]
 
 class MasterApiKeyScopeFullResponseSerializer(MasterApiKeyScopeBaseSerializer):

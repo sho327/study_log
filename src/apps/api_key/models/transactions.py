@@ -108,14 +108,6 @@ class T_ApiKey(BaseModel):
         null=True,
         blank=True,
     )
-    # 無効化日時
-    revoked_at = models.DateTimeField(
-        db_column="revoked_at",
-        verbose_name="無効化日時",
-        db_comment="無効化日時",
-        null=True,
-        blank=True,
-    )
     # スコープ
     scopes = models.ManyToManyField(
         "api_key.M_ApiKeyScope",  # 循環参照対策(文字で定義することで、後での紐付けとする)

@@ -12,7 +12,7 @@ from core.views import CommonResponseMixin
 
 # --- APIキーモジュール ---
 from apps.api_key.models import M_ApiKeyScope
-from apps.api_key.serializers.master_api_key_scope import MasterApiKeyScopeResponseSerializer
+from apps.api_key.serializers.master_api_key_scope_base import MasterApiKeyScopeMiniResponseSerializer
 
 KINO_ID_BASE = "master-api-key-scopes"
 
@@ -20,7 +20,7 @@ class M_ApiKeyScopeViewSet(CommonResponseMixin, viewsets.ModelViewSet):
     """
     APIキースコープマスタ CRUD ViewSet
     """
-    serializer_class = MasterApiKeyScopeResponseSerializer
+    serializer_class = MasterApiKeyScopeMiniResponseSerializer
 
     # ------------------------------------------------------------------
     # Django標準メソッドのオーバーライド

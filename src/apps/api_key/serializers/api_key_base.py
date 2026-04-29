@@ -21,7 +21,11 @@ class ApiKeyMiniResponseSerializer(ApiKeyBaseSerializer):
     class Meta(ApiKeyBaseSerializer.Meta):
         fields = [
             "id", 
-            "name"
+            "name",
+            "client_key",
+            "expired_at",
+            "last_used_at",
+            "is_active",
         ]
 
 class ApiKeyFullResponseSerializer(ApiKeyBaseSerializer):
@@ -29,6 +33,7 @@ class ApiKeyFullResponseSerializer(ApiKeyBaseSerializer):
     【最大構成】詳細用
     基本モデルの全フィールド。
     ただし、外部キー先のIDだけでなく中身(オブジェクト)を返したい項目だけ上書き。
+    ※ secretは返す際に暗号化しているので、そのまま返すことが可能
     """
 
     # Mini系のシリアライザを再利用し中身を展開
