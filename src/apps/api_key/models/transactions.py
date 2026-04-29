@@ -143,6 +143,12 @@ class T_ApiKey(BaseModel):
                 condition=Q(deleted_at__isnull=True),
                 name="unique_t_api_key_client_key_active",
             ),
+            # 未削除のトークン間でのみname/userをユニークにする
+            UniqueConstraint(
+                fields=["name", "user"],
+                condition=Q(deleted_at__isnull=True),
+                name="unique_t_api_key_name_user_active",
+            ),
         ]
 
     def __str__(self):

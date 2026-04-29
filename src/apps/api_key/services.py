@@ -7,8 +7,8 @@ from django.utils import timezone
 from apps.account.models import M_User
 from apps.artist.exceptions import ArtistAlreadyExistsError, ArtistNotFoundError
 
-# --- ログモジュール ---
-from apps.log.models import T_ApiKey
+# --- APIキーモジュール ---
+from apps.api_key.models import T_ApiKey
 
 # --- 共通モジュール ---
 from apps.common.models import T_FileResource
