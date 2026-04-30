@@ -59,3 +59,43 @@ class M_Emoji(BaseModel):
         # display_nameがない場合でも壊れないように調整
         name = self.display_name if self.display_name else "No Name"
         return f"{self.code} - {name}"
+
+
+# タグマスタ
+class M_Tag(models.Model):
+    # ---------- Consts ----------
+    # ---------- Fields ----------
+    # ID(URLに使用される可能性もあるため、予測できないUUIDで保持する)
+    id = models.UUIDField(
+        db_column="id",
+        verbose_name="ID",
+        db_comment="ID",
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    # タグ名
+    name = models.CharField(
+        db_column="name",
+        verbose_name="タグ名",
+        db_comment="タグ名",
+        max_length=64,
+    )
+
+    # テーブル名
+    class Meta:
+        db_table = "m_tag"
+        db_table_comment = "タグマスタ"
+        verbose_name = "タグマスタ"
+        verbose_name_plural = "タグマスタ"
+        constraints = [
+            # 未削除のテーマ間でのみnameをユニークにする
+            UniqueConstraint(
+                fields=["name"],
+                condition=Q(deleted_at__isnull=True),
+                name="unique_m_tag_name_active",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.name}"
