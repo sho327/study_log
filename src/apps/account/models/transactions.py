@@ -176,6 +176,7 @@ class T_Profile(BaseModel):
     # ---------- Consts ----------
     # アカウントステータスコード(アカウントの論理的なライフサイクル(最終的な利用可否))
     # 一時的な認証プロセスではなく、ユーザーの永続的な状態(退会、凍結、ロック)を示す
+    # 数値にすることで状態の重さが一目で分かるようにする意図もあり
     class AccountStatus(models.IntegerChoices):
         ACTIVE = 10, "アクティブ"
         TEMPORARY_LOCKED = 30, "一時ロック"
