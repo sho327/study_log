@@ -13,6 +13,8 @@ from apps.log.models import (
     T_LogComment,
     R_LogAttachment,
     R_LogCommentAttachment,
+    R_LogReaction,
+    R_LogCommentReaction,
 )
 
 # --- 共通モジュール ---
@@ -312,6 +314,9 @@ class LogService:
     ):
         """コメントを新規登録する"""
         # 1. ログの取得(存在チェックとロック)
+        # SELECT * FROM t_log WHERE id = '...' FOR UPDATE; を実行し、トランザクション中のロックを取得する
+        # 「数値を増減させる」「設定を書き換える」など、同時に実行されるとデータが矛盾してしまう可能性がある更新処理の直前に使う
+        # ※コメント中はログの削除をさせない※
         try:
             log = T_Log.objects.select_for_update().get(
                 id=log_id,
@@ -366,6 +371,8 @@ class LogService:
     ):
         """ログ情報を更新する"""
         # 1. ログの取得(存在チェックとロック)
+        # SELECT * FROM t_log WHERE id = '...' FOR UPDATE; を実行し、トランザクション中のロックを取得する
+        # 「数値を増減させる」「設定を書き換える」など、同時に実行されるとデータが矛盾してしまう可能性がある更新処理の直前に使う
         try:
             log = T_Log.objects.select_for_update().get(
                 id=log_id,
@@ -450,11 +457,14 @@ class LogService:
         kino_id: str, 
         user: M_User, 
         log_id: str,
-        comment_id: str,
+        log_comment_id: str,
         validated_data: dict,
     ):
         """コメント情報を更新する"""
         # 1. ログの取得(存在チェックとロック)
+        # SELECT * FROM t_log WHERE id = '...' FOR UPDATE; を実行し、トランザクション中のロックを取得する
+        # 「数値を増減させる」「設定を書き換える」など、同時に実行されるとデータが矛盾してしまう可能性がある更新処理の直前に使う
+        # ※コメント中はログの削除をさせない※
         try:
             log = T_Log.objects.select_for_update().get(
                 id=log_id,
@@ -465,9 +475,11 @@ class LogService:
             raise LogNotFoundError()
         
         # 2. コメントの取得(存在チェックとロック)
+        # SELECT * FROM t_log WHERE id = '...' FOR UPDATE; を実行し、トランザクション中のロックを取得する
+        # 「数値を増減させる」「設定を書き換える」など、同時に実行されるとデータが矛盾してしまう可能性がある更新処理の直前に使う
         try:
             log_comment = T_LogComment.objects.select_for_update().get(
-                id=comment_id, 
+                id=log_comment_id, 
                 log=log,
                 deleted_at__isnull=True
             )
@@ -519,50 +531,122 @@ class LogService:
     # ------------------------------------------------------------------
     # 削除系サービス
     # ------------------------------------------------------------------
-
-    @transaction.atomic
-    def delete_log(self, date_now: datetime, kino_id: str, user: M_User, log_id: str):
+    # ログ削除
+    def delete_log(
+        self, 
+        date_now: datetime, 
+        kino_id: str, 
+        user: M_User, 
+        log_id: str,
+    ):
         """ログを論理削除する"""
+         # 1. ログの取得(存在チェックとロック)
+        # SELECT * FROM t_log WHERE id = '...' FOR UPDATE; を実行し、トランザクション中のロックを取得する
+        # 「数値を増減させる」「設定を書き換える」など、同時に実行されるとデータが矛盾してしまう可能性がある更新処理の直前に使う
         try:
-            log = T_Log.objects.select_for_update().get(id=log_id, user=user, deleted_at__isnull=True)
-            
-            attachments = R_LogAttachment.objects.filter(log=log).select_related("file_resource")
-            for rel in attachments:
-                res = rel.file_resource
-                res.deleted_at = date_now
-                res.updated_by = user
-                res.updated_method = kino_id
-                res.save()
-            
-            attachments.delete()
-            R_LogTag.objects.filter(log=log).delete()
-
-            log.deleted_at = date_now
-            log.updated_by = user
-            log.updated_method = kino_id
-            log.save()
+            log = T_Log.objects.select_for_update().get(
+                id=log_id,
+                user=user,
+                deleted_at__isnull=True,
+            )
         except T_Log.DoesNotExist:
             raise LogNotFoundError()
+        
+        # 2. タグの紐付け削除
+        self.tag_service.remove_all_tags(
+            item_type=R_ItemTag.ItemType.LOG,
+            item_id=log.id,
+        )
 
-    @transaction.atomic
-    def delete_comment(self, date_now: datetime, kino_id: str, user: M_User, comment_id: str):
-        """コメントを論理削除する"""
+        # 3. リアクションの紐付け削除
+        R_LogReaction.objects.filter(
+            log=log,
+            deleted_at__isnull=True,
+        ).delete()
+
+        # 4. 添付ファイルの紐付け削除
+        old_attachment_rels = R_LogAttachment.objects.filter(
+            log=log,
+            deleted_at__isnull=True,
+        ).select_related("file_resource")
+        old_attachment_file_paths = [rel.file_resource.file_path for rel in old_attachment_rels]
         try:
-            comment = T_LogComment.objects.select_for_update().get(id=comment_id, deleted_at__isnull=True)
-            
-            attachments = R_LogCommentAttachment.objects.filter(log_comment=comment).select_related("file_resource")
-            for rel in attachments:
-                res = rel.file_resource
-                res.deleted_at = date_now
-                res.updated_by = user
-                res.updated_method = kino_id
-                res.save()
-            
-            attachments.delete()
-            
-            comment.deleted_at = date_now
-            comment.updated_by = user
-            comment.updated_method = kino_id
-            comment.save()
-        except T_LogComment.DoesNotExist:
+            # 古い添付ファイルレコードを削除
+            old_attachment_rels.delete()
+
+            # 5. 監査用情報の更新
+            log.updated_by = user
+            log.updated_method = kino_id
+            log.deleted_at = date_now
+            log.save()
+
+            # 6. 旧実ファイルの物理削除(成功時)
+            self._delete_physical_files(old_attachment_file_paths)
+
+            return log
+        except Exception as e:
+            raise e
+
+    # ログコメント削除
+    def delete_log_comment(
+        self, 
+        date_now: datetime,
+        kino_id: str,
+        user: M_User,
+        log_id: str,
+        log_comment_id: str,
+    ):
+        """コメントを論理削除する"""
+        # 1. ログの取得(存在チェックとロック)
+        # SELECT * FROM t_log WHERE id = '...' FOR UPDATE; を実行し、トランザクション中のロックを取得する
+        # 「数値を増減させる」「設定を書き換える」など、同時に実行されるとデータが矛盾してしまう可能性がある更新処理の直前に使う
+        # ※コメント中はログの削除をさせない※
+        try:
+            log = T_Log.objects.select_for_update().get(
+                id=log_id,
+                user=user,
+                deleted_at__isnull=True,
+            )
+        except T_Log.DoesNotExist:
             raise LogNotFoundError()
+        
+        # 2. コメントの取得(存在チェックとロック)
+        # SELECT * FROM t_log WHERE id = '...' FOR UPDATE; を実行し、トランザクション中のロックを取得する
+        # 「数値を増減させる」「設定を書き換える」など、同時に実行されるとデータが矛盾してしまう可能性がある更新処理の直前に使う
+        try:
+            log_comment = T_LogComment.objects.select_for_update().get(
+                id=log_comment_id, 
+                log=log,
+                deleted_at__isnull=True
+            )
+        except T_LogComment.DoesNotExist:
+            raise LogCommentNotFoundError()
+        
+        # 3. リアクションの紐付け削除
+        R_LogCommentReaction.objects.filter(
+            log_comment=log_comment,
+            deleted_at__isnull=True,
+        ).delete()
+
+        # 4. 添付ファイルの紐付け削除
+        old_attachment_rels = R_LogCommentAttachment.objects.filter(
+            log_comment=log_comment,
+            deleted_at__isnull=True,
+        ).select_related("file_resource")
+        old_attachment_file_paths = [rel.file_resource.file_path for rel in old_attachment_rels]        
+        try:
+            # 古い添付ファイルレコードを削除
+            old_attachment_rels.delete()
+
+            # 5. 監査用情報の更新
+            log_comment.updated_by = user
+            log_comment.updated_method = kino_id
+            log_comment.deleted_at = date_now
+            log_comment.save()
+
+            # 6. 旧実ファイルの物理削除(成功時)
+            self._delete_physical_files(old_attachment_file_paths)
+
+            return log_comment
+        except Exception as e:
+            raise e
