@@ -1,8 +1,7 @@
 import os
 from datetime import datetime
 from typing import List, Optional, Union
-
-from django.db import transaction
+from django.db import transaction, Prefetch
 
 # --- アカウントモジュール ---
 from apps.account.models import M_User
@@ -10,16 +9,18 @@ from apps.account.models import M_User
 # --- ログモジュール ---
 from apps.log.exceptions import LogError, LogNotFoundError, LogCommentNotFoundError
 from apps.log.models import (
-    T_Log, 
-    T_LogComment, 
-    R_LogAttachment, 
+    T_Log,
+    T_LogComment,
+    R_LogAttachment,
     R_LogCommentAttachment,
-    R_LogTag,
 )
 
 # --- 共通モジュール ---
-from apps.common.models import T_FileResource
+from apps.common.models import T_FileResource, R_ItemTag
+from apps.common.services.tag_service import TagService
 from apps.common.services.storage_service import StorageService
+
+# --- コアモジュール ---
 from core.consts import LOG_METHOD
 from core.exceptions.exceptions import ApplicationError
 from core.utils.log_helpers import log_output_by_msg_id
@@ -32,11 +33,11 @@ class LogService:
 
     def __init__(self):
         self.storage_service = StorageService()
+        self.tag_service = TagService()
 
     # ------------------------------------------------------------------
     # 内部ヘルパーメソッド
     # ------------------------------------------------------------------
-
     def _upload_attachments(
         self,
         user: M_User,
@@ -58,7 +59,7 @@ class LogService:
                 # 1. 画像の保存
                 path = self.storage_service.upload_file(
                     file_data=file_obj,
-                    folder_path=f"{prefix}/{parent_instance.id}",
+                    folder_path=f"{prefix}s/{parent_instance.id}",
                     original_filename=file_obj.name,
                 )
                 if path:
@@ -68,7 +69,7 @@ class LogService:
                     file_resource = T_FileResource.objects.create(
                         file_type=T_FileResource.FileType.FILE,
                         file_data=path,
-                        file_name=file_obj.name,
+                        file_name=f"{prefix}_attachments_{parent_instance.id}_{index}",
                         created_by=user,
                         created_method=kino_id,
                         updated_by=user,
@@ -104,7 +105,7 @@ class LogService:
                 self.storage_service.delete_file(path)
             raise e
 
-    def _delete_attachments(,
+    def _delete_attachments(
         self, 
         file_resources: List[T_FileResource],
     ):
@@ -124,71 +125,133 @@ class LogService:
     # 一覧系サービス
     # ------------------------------------------------------------------
     # ログ一覧取得
-    def list_log(self, date_now: datetime, kino_id: str, user: M_User, **filters):
+    def list_log(
+        self,
+        date_now: datetime,
+        kino_id: str,
+        user: M_User,
+        validated_data: dict,
+    ):
         """フィルタリングを考慮したログ一覧を取得する"""
         queryset = T_Log.objects.filter(
-            user=user, deleted_at__isnull=True
+            user=user,
+            deleted_at__isnull=True,
         ).select_related(
             "log_theme",
-            "log_category"
+            "log_category",
         ).prefetch_related(
-            "tags",
-            "log_r_log_attachment_set__file_resource"
+            "log_r_log_attachment_set__file_resource",
+            Prefetch(
+                "tag_r_itemtag_set",
+                queryset=R_ItemTag.objects.filter(
+                    item_type=R_ItemTag.ItemType.LOG,
+                    deleted_at__isnull=True,
+                    tag__deleted_at__isnull=True,
+                ).select_related("tag").order_by("tag__name"),
+                to_attr="tags",
+            ),
         )
 
-        if filters.get("date_from"):
-            queryset = queryset.filter(date__gte=filters["date_from"])
-        if filters.get("date_to"):
-            queryset = queryset.filter(date__lte=filters["date_to"])
+        # フィルタリング
+        if validated_data.get("date_from"):
+            queryset = queryset.filter(date__gte=validated_data["date_from"])
+        if validated_data.get("date_to"):
+            queryset = queryset.filter(date__lte=validated_data["date_to"])
 
-        return queryset.order_by("-date", "-created_at")
+        # ソート
+        queryset = queryset.order_by("-date", "-created_at")
 
-    # コメント一覧取得
-    def list_comment(self, date_now: datetime, kino_id: str, user: M_User, log_id: str):
+        return queryset
+
+    # ログコメント一覧取得
+    def list_log_comment(
+        self,
+        date_now: datetime,
+        kino_id: str,
+        user: M_User,
+        log_id: str,
+    ):
         """特定のログに紐づくコメント一覧を取得する"""
-        return T_LogComment.objects.filter(
-            log_id=log_id, deleted_at__isnull=True
+        queryset = T_LogComment.objects.filter(
+            log_id=log_id,
+            deleted_at__isnull=True,
         ).select_related(
-            "reply_to"
+            "reply_to",
         ).prefetch_related(
-            "log_r_log_comment_attachment_set__file_resource"
+            "log_r_log_comment_attachment_set__file_resource",
         ).order_by(
-            "created_at"
+            "created_at",
         )
 
+        return queryset
 
     # ------------------------------------------------------------------
     # 詳細系サービス
     # ------------------------------------------------------------------
     # ログ詳細取得
-    def detail_log(self, date_now: datetime, kino_id: str, user: M_User, log_id: str):
+    def detail_log(
+        self,
+        date_now: datetime,
+        kino_id: str,
+        user: M_User,
+        log_id: str,
+    ):
         """特定のログ詳細を取得する"""
         try:
             return T_Log.objects.filter(
-                id=log_id, user=user, deleted_at__isnull=True
-            ).select_related("log_theme", "log_category") \
-             .prefetch_related("tags", "log_r_log_attachment_set__file_resource") \
-             .get()
+                id=log_id,
+                user=user,
+                deleted_at__isnull=True,
+            ).select_related(
+                "log_theme",
+                "log_category",
+            ).prefetch_related(
+                "log_r_log_attachment_set__file_resource",
+                Prefetch(
+                    "tag_r_itemtag_set",
+                    queryset=R_ItemTag.objects.filter(
+                        item_type=R_ItemTag.ItemType.LOG,
+                        deleted_at__isnull=True,
+                        tag__deleted_at__isnull=True,
+                    ).select_related("tag").order_by("tag__name"),
+                    to_attr="tags",
+                ),
+            ).get()
         except T_Log.DoesNotExist:
             raise LogNotFoundError()
 
-    def detail_comment(self, date_now: datetime, kino_id: str, user: M_User, comment_id: str):
+    # ログコメント詳細取得
+    def detail_log_comment(
+        self,
+        date_now: datetime,
+        kino_id: str,
+        user: M_User,
+        comment_id: str,
+    ):
         """特定のコメント詳細を取得する"""
         try:
             return T_LogComment.objects.filter(
-                id=comment_id, deleted_at__isnull=True
-            ).select_related("reply_to") \
-             .prefetch_related("log_r_log_comment_attachment_set__file_resource") \
-             .get()
+                id=comment_id,
+                deleted_at__isnull=True,
+            ).select_related(
+                "reply_to",
+            ).prefetch_related(
+                "log_r_log_comment_attachment_set__file_resource",
+            ).get()
         except T_LogComment.DoesNotExist:
             raise LogNotFoundError()
 
     # ------------------------------------------------------------------
     # 登録系サービス
     # ------------------------------------------------------------------
-
-    @transaction.atomic
-    def create_log(self, date_now: datetime, kino_id: str, user: M_User, validated_data: dict, files: List = None):
+    # ログ登録
+    def create_log(
+        self,
+        date_now: datetime,
+        kino_id: str,
+        user: M_User,
+        validated_data: dict,
+    ):
         """ログを新規登録する"""
         upload_paths = []
         try:
@@ -224,7 +287,6 @@ class LogService:
                 self.storage_service.delete_file(path)
             raise e
 
-    @transaction.atomic
     def create_comment(self, date_now: datetime, kino_id: str, user: M_User, validated_data: dict, files: List = None):
         """コメントを新規登録する"""
         upload_paths = []

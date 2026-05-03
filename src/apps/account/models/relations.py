@@ -9,6 +9,9 @@ from core.models import BaseModel
 
 # フォローリレーション
 class R_Follow(BaseModel):
+    # ---------- Consts ----------
+    # ---------- Fields ----------
+    # ID (BIGINT PRIMARY KEY) はDjangoが自動で付与
     # フォロワー/ユーザマスタ(削除/物理削除の場合はCASCADE)
     follower = models.ForeignKey(
         "account.M_User",  # 循環参照対策(文字で定義することで、後での紐付けとする)

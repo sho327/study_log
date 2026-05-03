@@ -4,10 +4,12 @@ from django.conf import settings
 from django.db import models
 from django.db.models import Q, UniqueConstraint
 from simple_history.models import HistoricalRecords
+
 # --- コアモジュール ---
 from core.models import BaseModel
+
 # --- 共通モジュール ---
-from apps.common.models import AbstractAttachment
+from apps.common.models import AbstractAttachment, M_Tag
 
 
 # ログトラン
@@ -100,6 +102,14 @@ class T_Log(BaseModel):
         # 逆参照名を定義(例: 「参照先インスタンス.[related_name]」/通常参照は「本インスタンス.参照先モデル名(_id)」で取得可能)
         related_name="reactions_t_log_set",
     )
+
+    @property
+    def tags(self):
+        return M_Tag.objects.filter(
+            tag_r_itemtag_set__item_type=ItemType.LOG,
+            tag_r_itemtag_set__item_id=self.id,
+            deleted_at__isnull=True,
+        )
 
     # 履歴管理不要: django-simple-historyを使用しない
     # history = HistoricalRecords()
