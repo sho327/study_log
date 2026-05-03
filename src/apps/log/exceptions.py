@@ -33,3 +33,17 @@ class LogCommentNotFoundError(LogError):
     message_id = "ERR_LOG_002"
     message = "Log Comment Not Found Error"
     detail = "指定されたロクコメンド情報が見つかりません。"
+
+class LogReactionConflictError(LogError):
+    """指定されたログリアクションが既に追加されている場合に発生"""
+    status_code = status.HTTP_409_CONFLICT
+    message_id = "ERR_LOG_003"
+    message = "Log Reaction Conflict Error"
+    detail = "指定されたログリアクションは既に追加されています。"
+
+class LogCommentReactionConflictError(LogError):
+    """指定されたロクコメントリアクションが既に追加されている場合に発生"""
+    status_code = status.HTTP_409_CONFLICT
+    message_id = "ERR_LOG_004"
+    message = "Log Comment Reaction Conflict Error"
+    detail = "指定されたロクコメントリアクションは既に追加されています。"

@@ -7,7 +7,13 @@ from django.db import transaction, Prefetch
 from apps.account.models import M_User
 
 # --- ログモジュール ---
-from apps.log.exceptions import LogError, LogNotFoundError, LogCommentNotFoundError
+from apps.log.exceptions import (
+    LogError, 
+    LogNotFoundError, 
+    LogCommentNotFoundError, 
+    LogReactionConflictError, 
+    LogCommentReactionConflictError
+)
 from apps.log.models import (
     T_Log,
     T_LogComment,
@@ -18,9 +24,10 @@ from apps.log.models import (
 )
 
 # --- 共通モジュール ---
-from apps.common.models import T_FileResource, R_ItemTag
+from apps.common.models import M_Emoji, T_FileResource, R_ItemTag
 from apps.common.services.tag_service import TagService
 from apps.common.services.storage_service import StorageService
+from apps.common.exceptions import EmojiNotFoundError
 
 # --- コアモジュール ---
 from core.consts import LOG_METHOD
@@ -659,3 +666,190 @@ class LogService:
             return log_comment
         except Exception as e:
             raise e
+    
+    # ------------------------------------------------------------------
+    # その他サービス
+    # ------------------------------------------------------------------
+    # ログへのリアクション追加
+    def add_log_reaction(
+        self,
+        date_now: datetime,
+        kino_id: str,
+        user: M_User,
+        log_id: str,
+        emoji_id: str,
+    ):
+        """ログにリアクションを追加する"""
+        # 1. ログの存在確認(存在チェックのみでロックはかけない)
+        try:
+            log = T_Log.objects.get(
+                id=log_id,
+                deleted_at__isnull=True,
+            )
+        except T_Log.DoesNotExist:
+            raise LogNotFoundError()
+        
+        # 2. 絵文字マスタの存在確認(存在チェックのみでロックはかけない)
+        try:
+            emoji = M_Emoji.objects.get(
+                id=emoji_id,
+                deleted_at__isnull=True,
+            )
+        except M_Emoji.DoesNotExist:
+            raise EmojiNotFoundError()
+        
+        # 3. 既存の有効なリアクションの存在確認(重複してリアクション追加しないため)
+        try:
+            R_LogReaction.objects.get(
+                log=log,
+                user=user,
+                emoji=emoji,
+                deleted_at__isnull=True,
+            )
+        except R_LogReaction.DoesNotExist:
+            raise LogReactionConflictError()
+
+        # 4. リアクションの登録
+        reaction = R_LogReaction.objects.create(
+            log=log,
+            user=user,
+            emoji=emoji,
+            created_by=user,
+            created_method=kino_id,
+            updated_by=user,
+            updated_method=kino_id,
+        )
+        return reaction
+
+    # ログへのリアクション削除
+    def remove_log_reaction(
+        self,
+        date_now: datetime,
+        kino_id: str,
+        user: M_User,
+        log_id: str,
+        emoji_id: str,
+    ):
+        """ログからリアクションを削除(論理削除)する"""
+        # 1. ログの存在確認(存在チェックのみでロックはかけない)
+        try:
+            log = T_Log.objects.get(
+                id=log_id,
+                deleted_at__isnull=True,
+            )
+        except T_Log.DoesNotExist:
+            raise LogNotFoundError()
+        
+        # 2. 絵文字マスタの存在確認(存在チェックのみでロックはかけない)
+        try:
+            emoji = M_Emoji.objects.get(
+                id=emoji_id,
+                deleted_at__isnull=True,
+            )
+        except M_Emoji.DoesNotExist:
+            raise EmojiNotFoundError()
+        
+        # 3. リアクションの論理削除
+        count = R_LogReaction.objects.filter(
+            log=log,
+            user=user,
+            emoji=emoji,
+            deleted_at__isnull=True,
+        ).update(
+            updated_by=user,
+            updated_method=kino_id,
+            deleted_at=date_now,
+        )
+        return count > 0
+
+    # ログコメントへのリアクション追加
+    def add_log_comment_reaction(
+        self,
+        date_now: datetime,
+        kino_id: str,
+        user: M_User,
+        log_comment_id: str,
+        emoji_id: str,
+    ):
+        """ログコメントにリアクションを追加する"""
+        # 1. ログコメントの存在確認(存在チェックのみでロックはかけない)
+        try:
+            log_comment = T_LogComment.objects.get(
+                id=log_comment_id,
+                deleted_at__isnull=True,
+            )
+        except T_LogComment.DoesNotExist:
+            raise LogCommentNotFoundError()
+
+        # 2. 絵文字マスタの存在確認(存在チェックのみでロックはかけない)
+        try:
+            emoji = M_Emoji.objects.get(
+                id=emoji_id,
+                deleted_at__isnull=True,
+            )
+        except M_Emoji.DoesNotExist:
+            raise EmojiNotFoundError()
+        
+        # 3. 既存の有効なリアクションの存在確認(重複してリアクション追加しないため)
+        try:
+            R_LogCommentReaction.objects.get(
+                log_comment=log_comment,
+                user=user,
+                emoji=emoji,
+                deleted_at__isnull=True,
+            )
+        except R_LogCommentReaction.DoesNotExist:
+            raise LogCommentReactionConflictError()
+
+        # 4. リアクションの登録
+        reaction = R_LogCommentReaction.objects.create(
+            log_comment=log_comment,
+            user=user,
+            emoji=emoji,
+            created_by=user,
+            created_method=kino_id,
+            updated_by=user,
+            updated_method=kino_id,
+        )
+        return reaction
+
+    # ログコメントへのリアクション削除
+    def remove_log_comment_reaction(
+        self,
+        date_now: datetime,
+        kino_id: str,
+        user: M_User,
+        log_comment_id: str,
+        emoji_id: str,
+    ):
+        """ログコメントからリアクションを削除(論理削除)する"""
+        # 1. ログコメントの存在確認(存在チェックのみでロックはかけない)
+        try:
+            log_comment = T_LogComment.objects.get(
+                id=log_comment_id,
+                deleted_at__isnull=True,
+            )
+        except T_LogComment.DoesNotExist:
+            raise LogCommentNotFoundError()
+
+        # 2. 絵文字マスタの存在確認(存在チェックのみでロックはかけない)
+        try:
+            emoji = M_Emoji.objects.get(
+                id=emoji_id,
+                deleted_at__isnull=True,
+            )
+        except M_Emoji.DoesNotExist:
+            raise EmojiNotFoundError()
+            
+        # 3. リアクションの論理削除
+        count = R_LogCommentReaction.objects.filter(
+            log_comment=log_comment,
+            user=user,
+            emoji=emoji,
+            deleted_at__isnull=True,
+        ).update(
+            updated_by=user,
+            updated_method=kino_id,
+            deleted_at=date_now,
+        )
+        return count > 0

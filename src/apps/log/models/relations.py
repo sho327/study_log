@@ -135,7 +135,7 @@ class R_LogCommentReaction(AbstractEmojiReaction):
         db_comment="ログコメントトラン",
         on_delete=models.CASCADE,
         # 逆参照名を定義(例: 「参照先インスタンス.[related_name]」/通常参照は「本インスタンス.参照先モデル名(_id)」で取得可能)
-        related_name="log_r_log_comment_attachment_set",
+        related_name="log_r_log_comment_reaction_set",
     )
 
     # django-simple-historyを使用
