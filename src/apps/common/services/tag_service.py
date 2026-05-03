@@ -53,9 +53,9 @@ class TagService:
     # ------------------------------------------------------------------
     # その他サービス
     # ------------------------------------------------------------------
-    def add_tags(self, item_type: str, item_id: int, tag_names: List[str]):
+    def upsert_tags_by_names(self, item_type: str, item_id: int, tag_names: List[str]):
         """
-        タグを追加する。
+        タグ名をもとにタグをUPSERTする。
         """
         # 重複タグの削除(小文字変換/前後の空白削除/空文字列削除)
         unique_tag_names = list(set([tag.strip().lower() for tag in tag_names if tag and tag.strip()]))
@@ -65,6 +65,7 @@ class TagService:
             return
 
         # タグの取得または作成
+        bulk_tags = []
         tags = []
         for tag_name in unique_tag_names:
             tag = M_Tag.objects.filter(
@@ -72,10 +73,20 @@ class TagService:
                 deleted_at__isnull=True,
             ).first()
             if not tag:
-                tag = M_Tag.objects.create(
-                    name=tag_name,
-                )
+                bulk_tags.append(M_Tag(name=tag_name))
             tags.append(tag)
+        # タグを一括作成
+        if bulk_tags:
+            M_Tag.objects.bulk_create(
+                bulk_tags, 
+                ignore_conflicts=True
+            )
+            # bulk_tagsを再取得
+            bulk_tags = M_Tag.objects.filter(
+                name__in=[tag.name for tag in bulk_tags],
+                deleted_at__isnull=True,
+            )
+            tags.extend(bulk_tags)
 
         # すでに設定済みタグを弾く
         existing_tags = R_ItemTag.objects.filter(
@@ -103,9 +114,9 @@ class TagService:
             ]
         )
     
-    def remove_tags(self, item_type: str, item_id: int, tag_names: List[str]):
+    def remove_tags_by_names(self, item_type: str, item_id: int, tag_names: List[str]):
         """
-        タグを削除する。
+        タグ名をもとにタグを削除する。
         """
         # 重複タグの削除(小文字変換/前後の空白削除/空文字列削除)
         unique_tag_names = list(set([tag.strip().lower() for tag in tag_names if tag and tag.strip()]))
@@ -113,6 +124,7 @@ class TagService:
         # 重複タグが存在しない場合は終了
         if not unique_tag_names:
             return
+
         # タグの存在チェック
         tags = M_Tag.objects.filter(
             name__in=unique_tag_names,
@@ -128,7 +140,17 @@ class TagService:
             item_id=item_id,
             tag__in=tags,
             deleted_at__isnull=True,
-            tag__deleted_at__isnull=True,
+        ).delete()
+
+    def remove_all_tags(self, item_type: str, item_id: int):
+        """
+        タグを全削除する。
+        """
+        # タグの削除
+        R_ItemTag.objects.filter(
+            item_type=item_type,
+            item_id=item_id,
+            deleted_at__isnull=True,
         ).delete()
 
     

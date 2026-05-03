@@ -59,11 +59,6 @@ class T_Log(BaseModel):
         null=True,
         blank=True,
     )
-    # ログタグマスタ
-    tags = models.ManyToManyField(
-        "log.M_LogTag", 
-        through="log.R_LogTag",
-    )
     # 実施日
     date = models.DateField(
         db_column="date",

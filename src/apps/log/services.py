@@ -38,7 +38,7 @@ class LogService:
     # ------------------------------------------------------------------
     # 内部ヘルパーメソッド
     # ------------------------------------------------------------------
-    def _upload_attachments(
+    def _upload_attachment_files(
         self,
         user: M_User,
         kino_id: str,
@@ -105,7 +105,7 @@ class LogService:
                 self.storage_service.delete_file(path)
             raise e
 
-    def _delete_attachments(
+    def _delete_attachment_files(
         self, 
         file_resources: List[T_FileResource],
     ):
@@ -239,7 +239,7 @@ class LogService:
                 "log_r_log_comment_attachment_set__file_resource",
             ).get()
         except T_LogComment.DoesNotExist:
-            raise LogNotFoundError()
+            raise LogCommentNotFoundError()
 
     # ------------------------------------------------------------------
     # 登録系サービス
@@ -253,56 +253,101 @@ class LogService:
         validated_data: dict,
     ):
         """ログを新規登録する"""
-        upload_paths = []
-        try:
-            # 1. タグデータの分離
-            tags = validated_data.pop("tag_ids", [])
+        # 1. テーマ/カテゴリを取得
+        log_theme = validated_data.get("log_theme_id")
+        log_category = validated_data.get("log_category_id")
 
-            # 2. ログ本体の作成
-            log = T_Log.objects.create(
-                user=user,
-                **validated_data,
-                created_by=user,
-                created_method=kino_id,
-                updated_by=user,
-                updated_method=kino_id,
+        # 2. ログ本体の作成
+        log: T_Log = T_Log.objects.create(
+            user=user,
+            log_theme=log_theme,
+            log_category=log_category,
+            date=validated_data.get("date", date_now.date()),
+            duration=validated_data.get("duration", 0),
+            content=validated_data.get("content", ""),
+            output_url=validated_data.get("output_url", ""),
+            created_by=user,
+            created_method=kino_id,
+            updated_by=user,
+            updated_method=kino_id,
+        )
+
+        # 3. タグとの紐付け(タグマスタに存在していれば、該当タグマスタのIDを使用、存在しなければタグマスタも新規作成し紐付ける)
+        tag_names = validated_data.get("tag_names", [])
+        if tag_names:
+            self.tag_service.add_tags(
+                item_type=R_ItemTag.ItemType.LOG,
+                item_id=log.id,
+                tag_names=tag_names,
             )
 
-            # 3. タグとの紐付け
-            if tags:
-                tag_links = [
-                    R_LogTag(log=log, tag=tag, created_by=user, created_method=kino_id, updated_by=user, updated_method=kino_id)
-                    for tag in tags
-                ]
-                R_LogTag.objects.bulk_create(tag_links)
-
-            # 4. 添付ファイルの登録 (内部でupload_file実行 & 例外時物理削除)
-            if files:
-                upload_paths = self._process_attachments(user, kino_id, log, files, R_LogAttachment)
+        upload_paths = []
+        try:
+            # 4. ログに紐づく添付ファイルリストの登録(エラー時はアップロード済みファイルを削除(ロールバック))
+            attachment_files = validated_data.get("attachment_files", [])
+            if attachment_files:
+                upload_paths = self._upload_attachment_files(
+                    user=user,
+                    kino_id=kino_id,
+                    model_instance=log,
+                    files=attachment_files,
+                    attachment_model=R_LogAttachment,
+                )
 
             return log
         except Exception as e:
-            # 失敗時に保存した画像を即時削除
+            # 失敗時に保存したファイルを即時削除
             for path in upload_paths:
                 self.storage_service.delete_file(path)
             raise e
 
-    def create_comment(self, date_now: datetime, kino_id: str, user: M_User, validated_data: dict, files: List = None):
+    # ログコメント登録
+    def create_log_comment(
+        self,
+        date_now: datetime,
+        kino_id: str,
+        user: M_User,
+        log_id: str,
+        validated_data: dict,
+    ):
         """コメントを新規登録する"""
+        # 1. ログの取得(存在チェックとロック)
+        try:
+            log = T_Log.objects.select_for_update().get(
+                id=log_id,
+                user=user,
+                deleted_at__isnull=True,
+            )
+        except T_Log.DoesNotExist:
+            raise LogNotFoundError()
+
+        # 2. コメント本体の作成
+        log_comment = T_LogComment.objects.create(
+            log=log,
+            content=validated_data.get("content", ""),
+            reply_to=validated_data.get("reply_to_id", None),
+            created_by=user,
+            created_method=kino_id,
+            updated_by=user,
+            updated_method=kino_id,
+        )
+
         upload_paths = []
         try:
-            comment = T_LogComment.objects.create(
-                **validated_data,
-                created_by=user,
-                created_method=kino_id,
-                updated_by=user,
-                updated_method=kino_id,
-            )
-            if files:
-                upload_paths = self._process_attachments(user, kino_id, comment, files, R_LogCommentAttachment)
-            return comment
+            # 3. ログコメントに紐づく添付ファイルリストの登録(エラー時はアップロード済みファイルを削除(ロールバック))
+            attachment_files = validated_data.get("attachment_files", [])
+            if attachment_files:
+                upload_paths = self._upload_attachment_files(
+                    user=user,
+                    kino_id=kino_id,
+                    model_instance=log_comment,
+                    files=attachment_files,
+                    attachment_model=R_LogCommentAttachment,
+                )
+
+            return log_comment
         except Exception as e:
-            # 失敗時に保存した画像を即時削除
+            # 失敗時に保存したファイルを即時削除
             for path in upload_paths:
                 self.storage_service.delete_file(path)
             raise e
@@ -310,10 +355,59 @@ class LogService:
     # ------------------------------------------------------------------
     # 更新系サービス
     # ------------------------------------------------------------------
-
-    @transaction.atomic
-    def update_log(self, date_now: datetime, kino_id: str, user: M_User, log_id: str, validated_data: dict, files: List = None):
+    # ログ更新
+    def update_log(
+        self,
+        date_now: datetime,
+        kino_id: str,
+        user: M_User,
+        log_id: str,
+        validated_data: dict,
+    ):
         """ログ情報を更新する"""
+        # 1. ログの取得(存在チェックとロック)
+        try:
+            log = T_Log.objects.select_for_update().get(
+                id=log_id,
+                user=user,
+                deleted_at__isnull=True,
+            )
+        except T_Log.DoesNotExist:
+            raise LogNotFoundError()
+
+        if "log_theme_id" in validated_data:
+            log.log_theme = validated_data["log_theme_id"]
+        
+        if "log_category_id" in validated_data:
+            log.log_category = validated_data["log_category_id"]
+        
+        if "date" in validated_data:
+            log.date = validated_data["date"]
+        
+        if "duration" in validated_data:
+            log.duration = validated_data["duration"]
+        
+        if "content" in validated_data:
+            log.content = validated_data["content"]
+        
+        if "output_url" in validated_data:
+            log.output_url = validated_data["output_url"]
+        
+        log.updated_method = kino_id
+        log.updated_by = user
+        log.save()
+
+        # 3. タグとの紐付け(タグマスタに存在していれば、該当タグマスタのIDを使用、存在しなければタグマスタも新規作成し紐付ける)
+        tag_names = validated_data.get("tag_names", [])
+        if tag_names:
+            self.tag_service.add_tags(
+                item_type=R_ItemTag.ItemType.LOG,
+                item_id=log.id,
+                tag_names=tag_names,
+            )
+            
+        
+            
         delete_resource_list = []
         try:
             log = T_Log.objects.select_for_update().get(id=log_id, user=user, deleted_at__isnull=True)
