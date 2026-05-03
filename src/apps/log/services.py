@@ -2,6 +2,7 @@ import os
 from datetime import datetime
 from typing import List, Optional, Union
 from django.db import transaction, Prefetch
+from django.db.models import Count, Q, QuerySet
 
 # --- アカウントモジュール ---
 from apps.account.models import M_User
@@ -112,8 +113,27 @@ class LogService:
         ).select_related(
             "log_theme",
             "log_category",
+        ).annotate(
+            # コメント数の集計(N+1対策)
+            # Countを使用することで、コメントの削除チェックなどを行わずに、
+            # 未削除のコメントのみを事前に集計し、シリアライザ内でのループ処理時にN+1が発生しないようにする
+            comment_count=Count(
+                "log_t_log_comment_set",
+                filter=Q(log_t_log_comment_set__deleted_at__isnull=True),
+                distinct=True
+            )
         ).prefetch_related(
             "log_r_log_attachment_set__file_resource",
+            # リアクションの一括取得(シリアライザでのメモリ集計用)
+            # Prefetchを使用することで、未削除のリアクションのみを事前に取得し、
+            # シリアライザ内でのループ処理時にN+1が発生しないようにする
+            Prefetch(
+                "log_r_log_reaction_set",
+                queryset=R_LogReaction.objects.filter(deleted_at__isnull=True)
+            ),
+            # タグの一括取得
+            # Prefetchを使用することで、タグの削除チェックなどを行わずに、
+            # 未削除のタグのみを事前に取得し、シリアライザ内でのループ処理時にN+1が発生しないようにする
             Prefetch(
                 "tag_r_itemtag_set",
                 queryset=R_ItemTag.objects.filter(
@@ -152,6 +172,13 @@ class LogService:
             "reply_to",
         ).prefetch_related(
             "log_r_log_comment_attachment_set__file_resource",
+            # リアクションの一括取得(シリアライザでのメモリ集計用)
+            # Prefetchを使用することで、未削除のリアクションのみを事前に取得し、
+            # シリアライザ内でのループ処理時にN+1が発生しないようにする
+            Prefetch(
+                "log_r_log_comment_reaction_set",
+                queryset=R_LogCommentReaction.objects.filter(deleted_at__isnull=True)
+            )
         ).order_by(
             "created_at",
         )
@@ -178,8 +205,45 @@ class LogService:
             ).select_related(
                 "log_theme",
                 "log_category",
+            ).annotate(
+                # コメント数の集計(N+1対策)
+                # Countを使用することで、コメントの削除チェックなどを行わずに、
+                # 未削除のコメントのみを事前に集計し、シリアライザ内でのループ処理時にN+1が発生しないようにする
+                comment_count=Count(
+                    "log_t_log_comment_set",
+                    filter=Q(log_t_log_comment_set__deleted_at__isnull=True),
+                    distinct=True
+                )
             ).prefetch_related(
                 "log_r_log_attachment_set__file_resource",
+                # リアクションの一括取得(シリアライザでのメモリ集計用)
+                # Prefetchを使用することで、未削除のリアクションのみを事前に取得し、
+                # シリアライザ内でのループ処理時にN+1が発生しないようにする
+                Prefetch(
+                    "log_r_log_reaction_set",
+                    queryset=R_LogReaction.objects.filter(deleted_at__isnull=True)
+                ),
+                # コメント階層全体の最適化取得
+                # Prefetchを使用することで、コメント/返信コメント、添付ファイル、リアクションをまとめて取得し、
+                # シリアライザ内でのループ処理時にN+1が発生しないようにする
+                Prefetch(
+                    "log_t_log_comment_set",
+                    queryset=T_LogComment.objects.filter(
+                        deleted_at__isnull=True
+                    ).select_related("created_by").prefetch_related(
+                        Prefetch(
+                            "log_r_log_comment_attachment_set",
+                            queryset=R_LogCommentAttachment.objects.filter(deleted_at__isnull=True).select_related("file_resource")
+                        ),
+                        Prefetch(
+                            "log_r_log_comment_reaction_set",
+                            queryset=R_LogCommentReaction.objects.filter(deleted_at__isnull=True)
+                        )
+                    )
+                ),
+                # タグの一括取得
+                # Prefetchを使用することで、タグの削除チェックなどを行わずに、
+                # 未削除のタグのみを事前に取得し、シリアライザ内でのループ処理時にN+1が発生しないようにする
                 Prefetch(
                     "tag_r_itemtag_set",
                     queryset=R_ItemTag.objects.filter(
@@ -210,6 +274,13 @@ class LogService:
                 "reply_to",
             ).prefetch_related(
                 "log_r_log_comment_attachment_set__file_resource",
+                # リアクションの一括取得(シリアライザでのメモリ集計用)
+                # Prefetchを使用することで、未削除のリアクションのみを事前に取得し、
+                # シリアライザ内でのループ処理時にN+1が発生しないようにする
+                Prefetch(
+                    "log_r_log_comment_reaction_set",
+                    queryset=R_LogCommentReaction.objects.filter(deleted_at__isnull=True)
+                )
             ).get()
         except T_LogComment.DoesNotExist:
             raise LogCommentNotFoundError()

@@ -39,11 +39,17 @@ class LogCommentReactionCountSerializer(serializers.Serializer):
     count = serializers.IntegerField()
 
     def get_emoji(self, obj):
-        # emoji_id からマスター情報を取得して展開
-        emoji = M_Emoji.objects.filter(id=obj["emoji_id"]).first()
-        if not emoji:
+        # シリアライザのコンテキストを利用して、一度取得した絵文字情報を使い回す(N+1対策)
+        emojis = self.context.get('_emoji_cache')
+        if emojis is None:
+            # 初回のみ全件取得してコンテキストに保持(削除されていないもの)
+            emojis = {str(e.id): e for e in M_Emoji.objects.filter(deleted_at__isnull=True)}
+            self.context['_emoji_cache'] = emojis
+        emoji_instance = emojis.get(str(obj["emoji_id"]))
+        if not emoji_instance:
             return None
-        return MasterEmojiMiniResponseSerializer(emoji, context=self.context).data
+            
+        return MasterEmojiMiniResponseSerializer(emoji_instance, context=self.context).data
 
 
 class LogCommentMiniResponseSerializer(LogCommentBaseSerializer):
@@ -61,7 +67,9 @@ class LogCommentMiniResponseSerializer(LogCommentBaseSerializer):
     user = AccountMiniResponseSerializer(source="created_by", read_only=True)
 
     # リアクション集計
-    reaction_counts = LogCommentReactionCountSerializer(many=True, read_only=True)
+    # シリアライザで計算するとN+1問題で重くなるため、ReadOnlyFieldとして定義し
+    # サービス層/ビュー層で .annotate() により付与された値を表示する設計とする
+    reaction_counts = serializers.SerializerMethodField()
 
     class Meta(LogCommentBaseSerializer.Meta):
         # 画面に並べる最低限の項目に絞る
@@ -73,6 +81,21 @@ class LogCommentMiniResponseSerializer(LogCommentBaseSerializer):
             "reaction_counts",
             "created_at",
         ]
+
+    def get_reaction_counts(self, obj):
+        """プリフェッチされたデータをメモリ上で集計する(N+1対策)"""
+        # Prefetchにより、既に全件ロードされていることを前提とする
+        reactions = obj.log_r_log_comment_reaction_set.all()
+        counts = {}
+        for r in reactions:
+            emoji_id = str(r.emoji_id)
+            counts[emoji_id] = counts.get(emoji_id, 0) + 1
+        data = [
+            {"emoji_id": emoji_id, "count": count} 
+            for emoji_id, count in sorted(counts.items(), key=lambda x: x[1], reverse=True)
+        ]
+        # LogCommentReactionCountSerializer を使って絵文字情報を展開（コンテキストキャッシュが効く）
+        return LogCommentReactionCountSerializer(data, many=True, context=self.context).data
 
 
 class LogCommentFullResponseSerializer(LogCommentBaseSerializer):
@@ -87,9 +110,25 @@ class LogCommentFullResponseSerializer(LogCommentBaseSerializer):
     user = AccountMiniResponseSerializer(source="created_by", read_only=True)
 
     # リアクション集計
-    reaction_counts = LogCommentReactionCountSerializer(many=True, read_only=True)
+    # シリアライザで計算するとN+1問題で重くなるため、ReadOnlyFieldとして定義し
+    # サービス層/ビュー層で .annotate() により付与された値を表示する設計とする
+    reaction_counts = serializers.SerializerMethodField()
 
     class Meta(LogCommentBaseSerializer.Meta):
         fields = "__all__"
 
+    def get_reaction_counts(self, obj):
+        """プリフェッチされたデータをメモリ上で集計する(N+1対策)"""
+        # Prefetchにより、既に全件ロードされていることを前提とする
+        reactions = obj.log_r_log_comment_reaction_set.all()
+        counts = {}
+        for r in reactions:
+            emoji_id = str(r.emoji_id)
+            counts[emoji_id] = counts.get(emoji_id, 0) + 1
+        data = [
+            {"emoji_id": emoji_id, "count": count} 
+            for emoji_id, count in sorted(counts.items(), key=lambda x: x[1], reverse=True)
+        ]
+        # LogCommentReactionCountSerializer を使って絵文字情報を展開（コンテキストキャッシュが効く）
+        return LogCommentReactionCountSerializer(data, many=True, context=self.context).data
 
