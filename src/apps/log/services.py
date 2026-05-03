@@ -275,7 +275,7 @@ class LogService:
         # 3. タグとの紐付け(タグマスタに存在していれば、該当タグマスタのIDを使用、存在しなければタグマスタも新規作成し紐付ける)
         tag_names = validated_data.get("tag_names", [])
         if tag_names:
-            self.tag_service.add_tags(
+            self.tag_service.upsert_tags_by_names(
                 item_type=R_ItemTag.ItemType.LOG,
                 item_id=log.id,
                 tag_names=tag_names,
@@ -392,94 +392,128 @@ class LogService:
         
         if "output_url" in validated_data:
             log.output_url = validated_data["output_url"]
-        
-        log.updated_method = kino_id
-        log.updated_by = user
-        log.save()
 
-        # 3. タグとの紐付け(タグマスタに存在していれば、該当タグマスタのIDを使用、存在しなければタグマスタも新規作成し紐付ける)
+        # 2. タグの紐付け(洗替方式)
+        self.tag_service.remove_all_tags(
+            item_type=R_ItemTag.ItemType.LOG,
+            item_id=log.id,
+        )
         tag_names = validated_data.get("tag_names", [])
         if tag_names:
-            self.tag_service.add_tags(
+            # タグとの紐付け(タグマスタに存在していれば、該当タグマスタのIDを使用、存在しなければタグマスタも新規作成し紐付ける)
+            self.tag_service.upsert_tags_by_names(
                 item_type=R_ItemTag.ItemType.LOG,
                 item_id=log.id,
                 tag_names=tag_names,
             )
-            
-        
-            
-        delete_resource_list = []
+
+        # 3. 添付ファイルの紐付け(洗替方式)
+        old_attachment_rels = R_LogAttachment.objects.filter(
+            log=log,
+            deleted_at__isnull=True,
+        ).select_related("file_resource")
+        old_attachment_file_paths = [rel.file_resource.file_path for rel in old_attachment_rels]        
+        upload_paths = []
         try:
-            log = T_Log.objects.select_for_update().get(id=log_id, user=user, deleted_at__isnull=True)
+            # 3-1. 古い添付ファイルレコードを削除
+            old_attachment_rels.delete()
+            # 3-2. 新しい添付ファイルをアップロードし、レコードを新規作成
+            attachment_files = validated_data.get("attachment_files", [])
+            if attachment_files:
+                upload_paths = self._upload_attachment_files(
+                    user=user,
+                    kino_id=kino_id,
+                    model_instance=log,
+                    files=attachment_files,
+                    attachment_model=R_LogAttachment,
+                )
 
-            # 1. タグ洗替
-            if "tag_ids" in validated_data:
-                tags = validated_data.pop("tag_ids")
-                R_LogTag.objects.filter(log=log).delete()
-                if tags:
-                    R_LogTag.objects.bulk_create([
-                        R_LogTag(log=log, tag=tag, created_by=user, created_method=kino_id, updated_by=user, updated_method=kino_id)
-                        for tag in tags
-                    ])
-
-            # 2. 添付ファイル洗替
-            if files is not None:
-                old_rels = R_LogAttachment.objects.filter(log=log).select_related("file_resource")
-                for rel in old_rels:
-                    delete_resource_list.append(rel.file_resource)
-                
-                old_rels.delete()
-                for res in delete_resource_list:
-                    res.delete()
-                
-                self._process_attachments(user, kino_id, log, files, R_LogAttachment)
-
-            # 3. フィールド更新
-            for attr, value in validated_data.items():
-                setattr(log, attr, value)
+            # 4. 監査用情報の更新
             log.updated_by = user
             log.updated_method = kino_id
             log.save()
 
-            # 4. 旧実ファイルの物理削除(成功時)
-            self._delete_physical_files(delete_resource_list)
+            # 5. 旧実ファイルの物理削除(成功時)
+            self._delete_physical_files(old_attachment_file_paths)
 
             return log
-        except T_Log.DoesNotExist:
-            raise LogNotFoundError()
         except Exception as e:
+            # 失敗時に保存したファイルを即時削除
+            for path in upload_paths:
+                self.storage_service.delete_file(path)
             raise e
 
-    @transaction.atomic
-    def update_comment(self, date_now: datetime, kino_id: str, user: M_User, comment_id: str, validated_data: dict, files: List = None):
+    # ログコメント更新
+    def update_log_comment(
+        self, 
+        date_now: datetime, 
+        kino_id: str, 
+        user: M_User, 
+        log_id: str,
+        comment_id: str,
+        validated_data: dict,
+    ):
         """コメント情報を更新する"""
-        delete_resource_list = []
+        # 1. ログの取得(存在チェックとロック)
         try:
-            comment = T_LogComment.objects.select_for_update().get(id=comment_id, deleted_at__isnull=True)
-
-            if files is not None:
-                old_rels = R_LogCommentAttachment.objects.filter(log_comment=comment).select_related("file_resource")
-                for rel in old_rels:
-                    delete_resource_list.append(rel.file_resource)
-                
-                old_rels.delete()
-                for res in delete_resource_list:
-                    res.delete()
-                
-                self._process_attachments(user, kino_id, comment, files, R_LogCommentAttachment)
-
-            for attr, value in validated_data.items():
-                setattr(comment, attr, value)
-            comment.updated_by = user
-            comment.updated_method = kino_id
-            comment.save()
-
-            self._delete_physical_files(delete_resource_list)
-
-            return comment
-        except T_LogComment.DoesNotExist:
+            log = T_Log.objects.select_for_update().get(
+                id=log_id,
+                user=user,
+                deleted_at__isnull=True,
+            )
+        except T_Log.DoesNotExist:
             raise LogNotFoundError()
+        
+        # 2. コメントの取得(存在チェックとロック)
+        try:
+            log_comment = T_LogComment.objects.select_for_update().get(
+                id=comment_id, 
+                log=log,
+                deleted_at__isnull=True
+            )
+        except T_LogComment.DoesNotExist:
+            raise LogCommentNotFoundError()
+        
+        if "content" in validated_data:
+            log_comment.content = validated_data["content"]
+        
+        if "reply_to_id" in validated_data:
+            log_comment.reply_to = validated_data["reply_to_id"]
+
+        # 3. 添付ファイルの紐付け(洗替方式)
+        old_attachment_rels = R_LogCommentAttachment.objects.filter(
+            log_comment=log_comment,
+            deleted_at__isnull=True,
+        ).select_related("file_resource")
+        old_attachment_file_paths = [rel.file_resource.file_path for rel in old_attachment_rels]        
+        upload_paths = []
+        try:
+            # 3-1. 古い添付ファイルレコードを削除
+            old_attachment_rels.delete()
+            # 3-2. 新しい添付ファイルをアップロードし、レコードを新規作成
+            attachment_files = validated_data.get("attachment_files", [])
+            if attachment_files:
+                upload_paths = self._upload_attachment_files(
+                    user=user,
+                    kino_id=kino_id,
+                    model_instance=log_comment,
+                    files=attachment_files,
+                    attachment_model=R_LogCommentAttachment,
+                )
+
+            # 4. 監査用情報の更新
+            log_comment.updated_by = user
+            log_comment.updated_method = kino_id
+            log_comment.save()
+
+            # 5. 旧実ファイルの物理削除(成功時)
+            self._delete_physical_files(old_attachment_file_paths)
+
+            return log_comment
         except Exception as e:
+            # 失敗時に保存したファイルを即時削除
+            for path in upload_paths:
+                self.storage_service.delete_file(path)
             raise e
 
     # ------------------------------------------------------------------

@@ -64,42 +64,46 @@ class TagService:
         if not unique_tag_names:
             return
 
-        # タグの取得または作成
-        bulk_tags = []
-        tags = []
-        for tag_name in unique_tag_names:
-            tag = M_Tag.objects.filter(
-                name=tag_name,
-                deleted_at__isnull=True,
-            ).first()
-            if not tag:
-                bulk_tags.append(M_Tag(name=tag_name))
-            tags.append(tag)
-        # タグを一括作成
-        if bulk_tags:
+        # 既存のタグを一括取得
+        existing_tags = M_Tag.objects.filter(
+            name__in=unique_tag_names,
+            deleted_at__isnull=True,
+        )
+        existing_tag_names = {t.name for t in existing_tags}
+
+        # 存在しないタグを作成
+        new_tag_names = [name for name in unique_tag_names if name not in existing_tag_names]
+        if new_tag_names:
             M_Tag.objects.bulk_create(
-                bulk_tags, 
+                [
+                    M_Tag(
+                        name=name,
+                    ) 
+                    for name in new_tag_names
+                ],
                 ignore_conflicts=True
             )
-            # bulk_tagsを再取得
-            bulk_tags = M_Tag.objects.filter(
-                name__in=[tag.name for tag in bulk_tags],
+            # 新規作成分を含めて再取得
+            all_tags = list(M_Tag.objects.filter(
+                name__in=unique_tag_names,
                 deleted_at__isnull=True,
-            )
-            tags.extend(bulk_tags)
+            ))
+        else:
+            all_tags = list(existing_tags)
 
         # すでに設定済みタグを弾く
-        existing_tags = R_ItemTag.objects.filter(
+        already_linked_tag_ids = R_ItemTag.objects.filter(
             item_type=item_type,
             item_id=item_id,
-            tag__in=tags,
+            tag__in=all_tags,
             deleted_at__isnull=True,
             tag__deleted_at__isnull=True,
         ).values_list("tag_id", flat=True)
-        tags = [tag for tag in tags if tag.id not in existing_tags]
 
-        # tagsが存在するかチェック
-        if not tags:
+        tags_to_link = [tag for tag in all_tags if tag.id not in already_linked_tag_ids]
+
+        # 紐付けが必要なタグが存在するかチェック
+        if not tags_to_link:
             return
 
         # tagsを関連付け
@@ -110,7 +114,7 @@ class TagService:
                     item_id=item_id,
                     tag=tag,
                 )
-                for tag in tags
+                for tag in tags_to_link
             ]
         )
     
