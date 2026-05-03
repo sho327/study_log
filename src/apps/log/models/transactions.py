@@ -96,6 +96,7 @@ class T_Log(BaseModel):
         db_comment="リアクション",
         through="log.R_LogReaction",  # 循環参照対策(文字で定義することで、後での紐付けとする)
         # 逆参照名を定義(例: 「参照先インスタンス.[related_name]」/通常参照は「本インスタンス.参照先モデル名(_id)」で取得可能)
+        through_fields=("log", "user"),
         related_name="reactions_t_log_set",
     )
 
@@ -139,7 +140,7 @@ class T_Log(BaseModel):
         # ]
 
     def __str__(self):
-        return f"{self.user} - {self.memo[:10]}..."
+        return f"{self.user} - {self.content[:10] if self.content else ''}..."
 
 # ログコメントトラン
 class T_LogComment(BaseModel):
@@ -192,6 +193,7 @@ class T_LogComment(BaseModel):
         db_comment="リアクション",
         through="log.R_LogCommentReaction",  # 循環参照対策(文字で定義することで、後での紐付けとする)
         # 逆参照名を定義(例: 「参照先インスタンス.[related_name]」/通常参照は「本インスタンス.参照先モデル名(_id)」で取得可能)
+        through_fields=("log_comment", "user"),
         related_name="reactions_t_log_comment_set",
     )
 

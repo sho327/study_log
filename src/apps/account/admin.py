@@ -3,7 +3,7 @@ from django.utils.translation import gettext_lazy as _
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from simple_history.admin import SimpleHistoryAdmin
 
-from apps.account.models import M_User, T_UserToken, T_LoginHistory, T_Profile
+from apps.account.models import M_User, T_UserToken, T_LoginHistory, T_Profile, R_Follow
 
 class SoftDeleteFilter(admin.SimpleListFilter):
     title = _('状態')
@@ -196,3 +196,45 @@ class T_LoginHistoryAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+# ------------------------------------------------------------------
+# R_Follow (フォローリレーション)
+# ------------------------------------------------------------------
+@admin.register(R_Follow)
+class R_FollowAdmin(admin.ModelAdmin):
+    """
+    フォローリレーションの管理設定
+    """
+    list_display = ("follower", "followee", "created_at", "deleted_at")
+    list_filter = (SoftDeleteFilter, "created_at", "deleted_at")
+    search_fields = ("follower__email", "followee__email")
+    readonly_fields = ("created_at", "updated_at")
+
+    def save_model(self, request, obj, form, change):
+        # 新規作成時 (change=False)
+        if not change:
+            # if not obj.updated_by:
+            #     obj.updated_by = request.user
+            # if not obj.updated_method:
+            #     obj.updated_method = "admin_panel"
+            
+            # admin新規時は以下とする
+            obj.created_by = request.user
+            obj.created_method = "admin_panel"
+            obj.updated_by = request.user
+            obj.updated_method = "admin_panel"
+        
+        # 更新時(change=True)
+        else:
+            # 「更新時」は既存の値が入っているので、「手動でクリアされて空になった場合」や「意図的に上書きしたい場合」を考える必要がある
+            # 基本的に「Adminで誰かが保存した」というログなら、強制的に上書きしても良いケースが多い？
+            # ※「空の場合だけ自動セット」にしたいなら以下のようにする
+            # if not obj.updated_by:
+            #     obj.updated_by = request.user
+            # if not obj.updated_method:
+            #     obj.updated_method = "admin_panel"
+            
+            # admin更新時は以下とする
+            obj.updated_by = request.user
+            obj.updated_method = "admin_panel"
+        super().save_model(request, obj, form, change)

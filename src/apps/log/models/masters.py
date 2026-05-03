@@ -7,7 +7,7 @@ from simple_history.models import HistoricalRecords
 from core.models import BaseModel
 
 # ログテーママスタ
-class M_LogTheme(models.Model):
+class M_LogTheme(BaseModel):
     # ---------- Consts ----------
     # ---------- Fields ----------
     # ID(URLに使用される可能性もあるため、予測できないUUIDで保持する)
@@ -57,7 +57,7 @@ class M_LogTheme(models.Model):
 
 
 # ログカテゴリマスタ
-class M_LogCategory(models.Model):
+class M_LogCategory(BaseModel):
     # ---------- Consts ----------
     # ---------- Fields ----------
     # ID(URLに使用される可能性もあるため、予測できないUUIDで保持する)

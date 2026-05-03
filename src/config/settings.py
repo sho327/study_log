@@ -111,6 +111,7 @@ INSTALLED_APPS = [
     "apps.account",       # アカウント認証・プロフィール機能
     "apps.common",        # 共通機能
     "apps.api_key",       # APIキー機能
+    "apps.log",           # ログ機能
 
     # ----- マイグレーション実行単位(依存関係) -----
     # python manage.py makemigrations account common api_key

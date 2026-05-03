@@ -39,11 +39,32 @@ class M_ApiKeyScopeAdmin(admin.ModelAdmin):
     readonly_fields = ("created_at", "updated_at")
 
     def save_model(self, request, obj, form, change):
+        # 新規作成時 (change=False)
         if not change:
+            # if not obj.updated_by:
+            #     obj.updated_by = request.user
+            # if not obj.updated_method:
+            #     obj.updated_method = "admin_panel"
+            
+            # admin新規時は以下とする
             obj.created_by = request.user
             obj.created_method = "admin_panel"
-        obj.updated_by = request.user
-        obj.updated_method = "admin_panel"
+            obj.updated_by = request.user
+            obj.updated_method = "admin_panel"
+        
+        # 更新時(change=True)
+        else:
+            # 「更新時」は既存の値が入っているので、「手動でクリアされて空になった場合」や「意図的に上書きしたい場合」を考える必要がある
+            # 基本的に「Adminで誰かが保存した」というログなら、強制的に上書きしても良いケースが多い？
+            # ※「空の場合だけ自動セット」にしたいなら以下のようにする
+            # if not obj.updated_by:
+            #     obj.updated_by = request.user
+            # if not obj.updated_method:
+            #     obj.updated_method = "admin_panel"
+            
+            # admin更新時は以下とする
+            obj.updated_by = request.user
+            obj.updated_method = "admin_panel"
         super().save_model(request, obj, form, change)
 
 
@@ -59,11 +80,32 @@ class R_ApiKeyScopeInline(admin.TabularInline):
     fields = ("api_key_scope",)
     
     def save_model(self, request, obj, form, change):
+        # 新規作成時 (change=False)
         if not change:
+            # if not obj.updated_by:
+            #     obj.updated_by = request.user
+            # if not obj.updated_method:
+            #     obj.updated_method = "admin_panel"
+            
+            # admin新規時は以下とする
             obj.created_by = request.user
             obj.created_method = "admin_panel"
-        obj.updated_by = request.user
-        obj.updated_method = "admin_panel"
+            obj.updated_by = request.user
+            obj.updated_method = "admin_panel"
+        
+        # 更新時(change=True)
+        else:
+            # 「更新時」は既存の値が入っているので、「手動でクリアされて空になった場合」や「意図的に上書きしたい場合」を考える必要がある
+            # 基本的に「Adminで誰かが保存した」というログなら、強制的に上書きしても良いケースが多い？
+            # ※「空の場合だけ自動セット」にしたいなら以下のようにする
+            # if not obj.updated_by:
+            #     obj.updated_by = request.user
+            # if not obj.updated_method:
+            #     obj.updated_method = "admin_panel"
+            
+            # admin更新時は以下とする
+            obj.updated_by = request.user
+            obj.updated_method = "admin_panel"
         super().save_model(request, obj, form, change)
 
 
@@ -107,11 +149,33 @@ class T_ApiKeyAdmin(admin.ModelAdmin):
     )
 
     def save_model(self, request, obj, form, change):
+        # 新規作成時 (change=False)
         if not change:
+            # if not obj.updated_by:
+            #     obj.updated_by = request.user
+            # if not obj.updated_method:
+            #     obj.updated_method = "admin_panel"
+            
+            # admin新規時は以下とする
             obj.created_by = request.user
             obj.created_method = "admin_panel"
-        obj.updated_by = request.user
-        obj.updated_method = "admin_panel"
+            obj.updated_by = request.user
+            obj.updated_method = "admin_panel"
+        
+        # 更新時(change=True)
+        else:
+            # 「更新時」は既存の値が入っているので、「手動でクリアされて空になった場合」や「意図的に上書きしたい場合」を考える必要がある
+            # 基本的に「Adminで誰かが保存した」というログなら、強制的に上書きしても良いケースが多い？
+            # ※「空の場合だけ自動セット」にしたいなら以下のようにする
+            # if not obj.updated_by:
+            #     obj.updated_by = request.user
+            # if not obj.updated_method:
+            #     obj.updated_method = "admin_panel"
+            
+            # admin更新時は以下とする
+            obj.updated_by = request.user
+            obj.updated_method = "admin_panel"
+        
         super().save_model(request, obj, form, change)
 
     # インライン側の保存もAdmin経由の更新情報をセットするためにオーバーライド

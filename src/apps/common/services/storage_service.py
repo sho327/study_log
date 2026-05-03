@@ -1,8 +1,8 @@
 import os
 import uuid
 from pathlib import Path
-from typing import BinaryIO, Optional
 from django.conf import settings
+from typing import Any, BinaryIO, List, Optional, Union
 
 # --- コアモジュール ---
 from core.consts import LOG_METHOD
@@ -20,7 +20,10 @@ class StorageService:
         self.base_path.mkdir(parents=True, exist_ok=True)
 
     def upload_file(
-        self, file_data: BinaryIO, folder_path: str, original_filename: str
+        self, 
+        file_data: BinaryIO, 
+        folder_path: str, 
+        original_filename: str
     ) -> Optional[str]:
         try:
             # 拡張子の取得 (.png, .jpg など)
@@ -56,7 +59,10 @@ class StorageService:
             )
             raise ExternalServiceError()
 
-    def delete_file(self, file_url: str) -> bool:
+    def delete_file(
+        self, 
+        file_url: str
+    ) -> bool:
         try:
             # 1. URLパス(相対パス)から Path オブジェクトを作成
             # 念のため '/' を取り除く
@@ -191,7 +197,10 @@ class StorageService:
                 self.delete_file(path)
             raise e
 
-    def delete_resources(self, resources: Union[List[T_FileResource], Any]):
+    def delete_resources(
+        self, 
+        resources: Union[List[T_FileResource], Any]
+    ) -> None:
         """T_FileResourceのリスト(QuerySet等)を受け取り、実ファイルとレコードを両方削除する"""
         if not resources:
             return

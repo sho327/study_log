@@ -150,6 +150,6 @@ class R_LogCommentReaction(AbstractEmojiReaction):
             UniqueConstraint(
                 fields=["log_comment", "user", "emoji"],
                 condition=Q(deleted_at__isnull=True),
-                name="unique_r_log_reaction_log_user_emoji_active",
+                name="unique_r_log_comment_reaction_log_user_emoji_active",
             ),
         ]
