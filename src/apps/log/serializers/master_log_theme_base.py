@@ -12,18 +12,18 @@ class MasterLogThemeBaseSerializer(serializers.ModelSerializer):
         model = M_LogTheme
         fields = "__all__" # 基本は全フィールド対象
 
-class MasterLogThemeMiniResponseSerializer(MasterLogThemeBaseSeriali):
+class MasterLogThemeMiniResponseSerializer(MasterLogThemeBaseSerializer):
     """
     【最小構成】一覧用
     Metaを上書きして、IDと名称だけに絞り込む
     """
-    class Meta(MasterLogThemeBaseSeriali.Meta):
+    class Meta(MasterLogThemeBaseSerializer.Meta):
         fields = [
             "id",  
             "name",
         ]
 
-class MasterLogThemeFullResponseSerializer(MasterLogThemeBaseSeriali):
+class MasterLogThemeFullResponseSerializer(MasterLogThemeBaseSerializer):
     """
     【最大構成】詳細用
     Baseの定義(__all__)をそのまま使い、モデルの変更に自動追従させる

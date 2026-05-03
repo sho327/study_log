@@ -77,15 +77,6 @@ class T_FileResource(BaseModel):
         null=True,
         blank=True,
     )
-    # 外部URL(Spotify/Deezerの画像)
-    external_url = models.URLField(
-        db_column="external_url",
-        verbose_name="外部URL",
-        db_comment="外部URL",
-        max_length=512,
-        null=True,
-        blank=True,
-    )
     # ファイル名
     file_name = models.CharField(
         db_column="file_name",
@@ -108,8 +99,6 @@ class T_FileResource(BaseModel):
         """
         内部ファイル/外部URL意識せずにURLを取得するためのプロパティ
         """
-        if self.external_url:
-            return self.external_url
         if self.file:
             return self.file.url
         return None
@@ -124,13 +113,6 @@ class T_FileResource(BaseModel):
         verbose_name = "ファイルリソーストラン"
         verbose_name_plural = "ファイルリソーストラン"
         constraints = [
-            # 未削除のレコード内でのみ、外部リソースが重複しないことを保証
-            UniqueConstraint(
-                fields=["external_url"],
-                # external_urlがnullでない場合のみチェック
-                condition=Q(deleted_at__isnull=True) & Q(external_url__isnull=False),
-                name="unique_t_file_resource_external_url_active",
-            ),
             # 未削除のレコード内でのみ、ファイルが重複しないことを保証
             UniqueConstraint(
                 fields=["file"],
