@@ -103,19 +103,18 @@ class LogService:
 
         except Exception as e:
             # 失敗時に保存した画像を即時削除
-            for path in upload_paths:
-                self.storage_service.delete_file(path)
+            self._delete_attachment_files(upload_paths)
             raise e
 
     def _delete_attachment_files(
         self, 
-        file_resources: List[T_FileResource],
+        file_paths: List[str],
     ):
         """実ファイルを物理削除する"""
-        for resource in file_resources:
+        for file_path in file_paths:
             try:
-                if resource.file:
-                    self.storage_service.delete_file(resource.file.name)
+                if file_path:
+                    self.storage_service.delete_file(file_path)
             except Exception as e:
                 log_output_by_msg_id(
                     log_id="MSGW001",
@@ -299,8 +298,7 @@ class LogService:
             return log
         except Exception as e:
             # 失敗時に保存したファイルを即時削除
-            for path in upload_paths:
-                self.storage_service.delete_file(path)
+            self._delete_attachment_files(upload_paths)
             raise e
 
     # ログコメント登録
@@ -353,8 +351,7 @@ class LogService:
             return log_comment
         except Exception as e:
             # 失敗時に保存したファイルを即時削除
-            for path in upload_paths:
-                self.storage_service.delete_file(path)
+            self._delete_attachment_files(upload_paths)
             raise e
 
     # ------------------------------------------------------------------
@@ -445,13 +442,12 @@ class LogService:
             log.save()
 
             # 5. 旧実ファイルの物理削除(成功時)
-            self._delete_physical_files(old_attachment_file_paths)
+            self._delete_attachment_files(old_attachment_file_paths)
 
             return log
         except Exception as e:
             # 失敗時に保存したファイルを即時削除
-            for path in upload_paths:
-                self.storage_service.delete_file(path)
+            self._delete_attachment_files(upload_paths)
             raise e
 
     # ログコメント更新
@@ -527,13 +523,12 @@ class LogService:
             log_comment.save()
 
             # 5. 旧実ファイルの物理削除(成功時)
-            self._delete_physical_files(old_attachment_file_paths)
+            self._delete_attachment_files(old_attachment_file_paths)
 
             return log_comment
         except Exception as e:
             # 失敗時に保存したファイルを即時削除
-            for path in upload_paths:
-                self.storage_service.delete_file(path)
+            self._delete_attachment_files(upload_paths)
             raise e
 
     # ------------------------------------------------------------------
@@ -631,7 +626,7 @@ class LogService:
             # 7. 旧実ファイルの物理削除(成功時)
             # ログのファイル + 全コメントのファイル
             all_delete_paths = old_attachment_file_paths + comment_file_paths
-            self._delete_physical_files(all_delete_paths)
+            self._delete_attachment_files(all_delete_paths)
 
             return log
         except Exception as e:
@@ -699,7 +694,7 @@ class LogService:
             log_comment.save()
 
             # 6. 旧実ファイルの物理削除(成功時)
-            self._delete_physical_files(old_attachment_file_paths)
+            self._delete_attachment_files(old_attachment_file_paths)
 
             return log_comment
         except Exception as e:
