@@ -19,7 +19,6 @@ def create_profile(sender, instance: M_User, created, **kwargs):
             user=instance,
             user_id_display=default_display_id,
             display_name=instance.email.split('@')[0], # 仮の名称
-            affiliation=None,
             bio=None,
             icon=None,
             is_setup_completed=False,

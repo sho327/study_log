@@ -48,80 +48,44 @@ class LogService:
         files: List,
         attachment_model: Union[type[R_LogAttachment], type[R_LogCommentAttachment]]
     ):
-        """添付ファイルを一括処理する。DB失敗時はアップロードしたファイルを物理削除する。"""
+        """添付ファイルを一括処理する。"""
         if not files:
-            return
+            return []
 
-        upload_paths = []
         prefix = "log" if isinstance(parent_instance, T_Log) else "log_comment"
         
-        try:
-            attachment_links = []
-            for index, file_obj in enumerate(files):
-                # 1. 画像の保存
-                path = self.storage_service.upload_file(
-                    file_data=file_obj,
-                    folder_path=f"{prefix}s/{parent_instance.id}",
-                    original_filename=file_obj.name,
-                )
-                if path:
-                    upload_paths.append(path)
+        # StorageServiceの一括アップロードを使用
+        file_resources = self.storage_service.upload_resources(
+            user=user,
+            kino_id=kino_id,
+            files=files,
+            folder_path=f"{prefix}s/{parent_instance.id}",
+            file_type=T_FileResource.FileType.FILE,
+            file_name_prefix=f"{prefix}_attachments_{parent_instance.id}",
+        )
 
-                    # 2. 画像リソースの作成
-                    file_resource = T_FileResource.objects.create(
-                        file_type=T_FileResource.FileType.FILE,
-                        file=path,
-                        file_name=f"{prefix}_attachments_{parent_instance.id}_{index}",
-                        file_size=file_obj.size,
-                        created_by=user,
-                        created_method=kino_id,
-                        updated_by=user,
-                        updated_method=kino_id,
-                    )
+        # 中間テーブル(リレーション)の作成
+        attachment_links = []
+        for index, resource in enumerate(file_resources):
+            link_params = {
+                "file_resource": resource,
+                "order": index,
+                "created_by": user,
+                "created_method": kino_id,
+                "updated_by": user,
+                "updated_method": kino_id,
+            }
+            if isinstance(parent_instance, T_Log):
+                link_params["log"] = parent_instance
+            else:
+                link_params["log_comment"] = parent_instance
 
-                    # 3. 中間テーブル用データの準備
-                    link_params = {
-                        "file_resource": file_resource,
-                        "order": index,
-                        "created_by": user,
-                        "created_method": kino_id,
-                        "updated_by": user,
-                        "updated_method": kino_id,
-                    }
-                    if isinstance(parent_instance, T_Log):
-                        link_params["log"] = parent_instance
-                    else:
-                        link_params["log_comment"] = parent_instance
+            attachment_links.append(attachment_model(**link_params))
 
-                    attachment_links.append(attachment_model(**link_params))
-
-            # 4. 中間テーブルの一括登録
-            if attachment_links:
-                attachment_model.objects.bulk_create(attachment_links)
-            
-            # 5. 一括登録完了後、アップロードしたパスリストの返却
-            return upload_paths
-
-        except Exception as e:
-            # 失敗時に保存した画像を即時削除
-            self._delete_attachment_files(upload_paths)
-            raise e
-
-    def _delete_attachment_files(
-        self, 
-        file_paths: List[str],
-    ):
-        """実ファイルを物理削除する"""
-        for file_path in file_paths:
-            try:
-                if file_path:
-                    self.storage_service.delete_file(file_path)
-            except Exception as e:
-                log_output_by_msg_id(
-                    log_id="MSGW001",
-                    params=[f"Warning: Failed to delete physical file: {str(e)}"],
-                    logger_name=LOG_METHOD.APPLICATION.value,
-                )
+        if attachment_links:
+            attachment_model.objects.bulk_create(attachment_links)
+        
+        return file_resources
 
     # ------------------------------------------------------------------
     # 一覧系サービス
@@ -283,23 +247,23 @@ class LogService:
                 tag_names=tag_names,
             )
 
-        upload_paths = []
+        new_resources = []
         try:
-            # 4. ログに紐づく添付ファイルリストの登録(エラー時はアップロード済みファイルを削除(ロールバック))
+            # 4. ログに紐づく添付ファイルリストの登録
             attachment_files = validated_data.get("attachment_files", [])
             if attachment_files:
-                upload_paths = self._upload_attachment_files(
+                new_resources = self._upload_attachment_files(
                     user=user,
                     kino_id=kino_id,
-                    model_instance=log,
+                    parent_instance=log,
                     files=attachment_files,
                     attachment_model=R_LogAttachment,
                 )
 
             return log
         except Exception as e:
-            # 失敗時に保存したファイルを即時削除
-            self._delete_attachment_files(upload_paths)
+            # 失敗時に保存したリソースを即時削除
+            self.storage_service.delete_resources(new_resources)
             raise e
 
     # ログコメント登録
@@ -336,29 +300,31 @@ class LogService:
             updated_method=kino_id,
         )
 
-        upload_paths = []
+        new_resources = []
         try:
-            # 3. ログコメントに紐づく添付ファイルリストの登録(エラー時はアップロード済みファイルを削除(ロールバック))
+            # 3. ログコメントに紐づく添付ファイルリストの登録
             attachment_files = validated_data.get("attachment_files", [])
             if attachment_files:
-                upload_paths = self._upload_attachment_files(
+                new_resources = self._upload_attachment_files(
                     user=user,
                     kino_id=kino_id,
-                    model_instance=log_comment,
+                    parent_instance=log_comment,
                     files=attachment_files,
                     attachment_model=R_LogCommentAttachment,
                 )
 
             return log_comment
         except Exception as e:
-            # 失敗時に保存したファイルを即時削除
-            self._delete_attachment_files(upload_paths)
+            # 失敗時に保存したリソースを即時削除
+            self.storage_service.delete_resources(new_resources)
             raise e
 
     # ------------------------------------------------------------------
     # 更新系サービス
     # ------------------------------------------------------------------
     # ログ更新
+    # ※注意※ validated_dataに「attachment_files」が含まれる場合、関連付けされているリソースを洗替
+    # = 既存のリソースを全て削除 -> 新しいリソースを全件登録(空リストで添付ファイル無しにも可能)
     def update_log(
         self,
         date_now: datetime,
@@ -413,45 +379,53 @@ class LogService:
             )
 
         # 3. 添付ファイルの紐付け(洗替方式)
-        old_attachment_rels = R_LogAttachment.objects.filter(
-            log=log,
-            deleted_at__isnull=True,
-        ).select_related("file_resource")
-        old_attachment_file_paths = [
-            rel.file_resource.file.name 
-            for rel in old_attachment_rels 
-            if rel.file_resource and rel.file_resource.file
-        ]
-        upload_paths = []
+        new_resources = []
+        old_resources = []
         try:
-            # 3-1. 古い添付ファイルレコードを削除
-            old_attachment_rels.delete()
-            # 3-2. 新しい添付ファイルをアップロードし、レコードを新規作成
-            attachment_files = validated_data.get("attachment_files", [])
-            if attachment_files:
-                upload_paths = self._upload_attachment_files(
-                    user=user,
-                    kino_id=kino_id,
-                    model_instance=log,
-                    files=attachment_files,
-                    attachment_model=R_LogAttachment,
-                )
+            # 3. 添付ファイルの紐付け(洗替方式: キーが存在する場合のみ実行)
+            if "attachment_files" in validated_data:
+                # 3-1. 物理削除用に古いリソースを保持
+                old_resources = [
+                    rel.file_resource 
+                    for rel in R_LogAttachment.objects.filter(log=log, deleted_at__isnull=True).select_related("file_resource")
+                    if rel.file_resource
+                ]
+                
+                # 3-2. DB上の古いリレーションを削除
+                R_LogAttachment.objects.filter(
+                    log=log, 
+                    deleted_at__isnull=True
+                ).delete()
+
+                # 3-3. 新しい添付ファイルがある場合はアップロードし、レコードを新規作成
+                attachment_files = validated_data.get("attachment_files", [])
+                if attachment_files:
+                    new_resources = self._upload_attachment_files(
+                        user=user,
+                        kino_id=kino_id,
+                        parent_instance=log,
+                        files=attachment_files,
+                        attachment_model=R_LogAttachment,
+                    )
 
             # 4. 監査用情報の更新
             log.updated_by = user
             log.updated_method = kino_id
             log.save()
 
-            # 5. 旧実ファイルの物理削除(成功時)
-            self._delete_attachment_files(old_attachment_file_paths)
+            # 5. 旧リソースの物理削除(成功時のみ実行)
+            if old_resources:
+                self.storage_service.delete_resources(old_resources)
 
             return log
         except Exception as e:
-            # 失敗時に保存したファイルを即時削除
-            self._delete_attachment_files(upload_paths)
+            # 失敗時に、今回新しく作成したリソースをロールバック(物理削除)
+            self.storage_service.delete_resources(new_resources)
             raise e
 
     # ログコメント更新
+    # ※注意※ validated_dataに「attachment_files」が含まれる場合、関連付けされているリソースを洗替
+    # = 既存のリソースを全て削除 -> 新しいリソースを全件登録(空リストで添付ファイル無しにも可能)
     def update_log_comment(
         self, 
         date_now: datetime, 
@@ -493,43 +467,48 @@ class LogService:
         if "reply_to_id" in validated_data:
             log_comment.reply_to = validated_data["reply_to_id"]
 
-        # 3. 添付ファイルの紐付け(洗替方式)
-        old_attachment_rels = R_LogCommentAttachment.objects.filter(
-            log_comment=log_comment,
-            deleted_at__isnull=True,
-        ).select_related("file_resource")
-        old_attachment_file_paths = [
-            rel.file_resource.file.name 
-            for rel in old_attachment_rels 
-            if rel.file_resource and rel.file_resource.file
-        ]
-        upload_paths = []
+        new_resources = []
+        old_resources = []
         try:
-            # 3-1. 古い添付ファイルレコードを削除
-            old_attachment_rels.delete()
-            # 3-2. 新しい添付ファイルをアップロードし、レコードを新規作成
-            attachment_files = validated_data.get("attachment_files", [])
-            if attachment_files:
-                upload_paths = self._upload_attachment_files(
-                    user=user,
-                    kino_id=kino_id,
-                    model_instance=log_comment,
-                    files=attachment_files,
-                    attachment_model=R_LogCommentAttachment,
-                )
+            # 3. 添付ファイルの紐付け(洗替方式: キーが存在する場合のみ実行)
+            if "attachment_files" in validated_data:
+                # 3-1. 物理削除用に古いリソースを保持
+                old_resources = [
+                    rel.file_resource 
+                    for rel in R_LogCommentAttachment.objects.filter(log_comment=log_comment, deleted_at__isnull=True).select_related("file_resource")
+                    if rel.file_resource
+                ]
+                
+                # 3-2. DB上の古いリレーションを削除
+                R_LogCommentAttachment.objects.filter(
+                    log_comment=log_comment,
+                    deleted_at__isnull=True
+                ).delete()
+
+                # 3-3. 新しい添付ファイルがある場合はアップロードし、レコードを新規作成
+                attachment_files = validated_data.get("attachment_files", [])
+                if attachment_files:
+                    new_resources = self._upload_attachment_files(
+                        user=user,
+                        kino_id=kino_id,
+                        parent_instance=log_comment,
+                        files=attachment_files,
+                        attachment_model=R_LogCommentAttachment,
+                    )
 
             # 4. 監査用情報の更新
             log_comment.updated_by = user
             log_comment.updated_method = kino_id
             log_comment.save()
 
-            # 5. 旧実ファイルの物理削除(成功時)
-            self._delete_attachment_files(old_attachment_file_paths)
+            # 5. 旧リソースの物理削除(成功時のみ実行)
+            if old_resources:
+                self.storage_service.delete_resources(old_resources)
 
             return log_comment
         except Exception as e:
-            # 失敗時に保存したファイルを即時削除
-            self._delete_attachment_files(upload_paths)
+            # 失敗時に、今回新しく作成したリソースをロールバック(物理削除)
+            self.storage_service.delete_resources(new_resources)
             raise e
 
     # ------------------------------------------------------------------
@@ -575,59 +554,45 @@ class LogService:
         )
         comment_ids = list(comments.values_list("id", flat=True))
         
-        comment_file_paths = []
+        # 物理削除用にリソースを保持
+        comment_resources = []
         if comment_ids:
+            comment_resources = [
+                rel.file_resource 
+                for rel in R_LogCommentAttachment.objects.filter(log_comment_id__in=comment_ids, deleted_at__isnull=True).select_related("file_resource")
+                if rel.file_resource
+            ]
+
             # 4-1. コメントのリアクション削除
             R_LogCommentReaction.objects.filter(
                 log_comment_id__in=comment_ids,
                 deleted_at__isnull=True,
             ).delete()
 
-            # 4-2. コメントの添付ファイルレコード削除とファイルパス収集
-            comment_attachment_rels = R_LogCommentAttachment.objects.filter(
-                log_comment_id__in=comment_ids,
-                deleted_at__isnull=True,
-            ).select_related("file_resource")
-            
-            comment_file_paths = [
-                rel.file_resource.file.name 
-                for rel in comment_attachment_rels 
-                if rel.file_resource and rel.file_resource.file
-            ]
-            comment_attachment_rels.delete()
-
-            # 4-3. コメント本体の論理削除
+            # 4-2. コメント本体の論理削除
             comments.update(
                 updated_by=user,
                 updated_method=kino_id,
                 deleted_at=date_now,
             )
 
-        # 5. ログ自体の添付ファイルの紐付け削除
-        old_attachment_rels = R_LogAttachment.objects.filter(
-            log=log,
-            deleted_at__isnull=True,
-        ).select_related("file_resource")
-        old_attachment_file_paths = [
-            rel.file_resource.file.name 
-            for rel in old_attachment_rels 
-            if rel.file_resource and rel.file_resource.file
+        # 5. ログ自体のリソース保持(削除用)
+        log_resources = [
+            rel.file_resource 
+            for rel in R_LogAttachment.objects.filter(log=log, deleted_at__isnull=True).select_related("file_resource")
+            if rel.file_resource
         ]
 
         try:
-            # 添付ファイルレコードを削除
-            old_attachment_rels.delete()
-
-            # 6. 監査用情報の更新
+            # 6. 監査用情報の更新と論理削除
             log.updated_by = user
             log.updated_method = kino_id
             log.deleted_at = date_now
             log.save()
 
-            # 7. 旧実ファイルの物理削除(成功時)
-            # ログのファイル + 全コメントのファイル
-            all_delete_paths = old_attachment_file_paths + comment_file_paths
-            self._delete_attachment_files(all_delete_paths)
+            # 7. 添付ファイルの物理削除(成功時のみ実行)
+            self.storage_service.delete_resources(comment_resources)
+            self.storage_service.delete_resources(log_resources)
 
             return log
         except Exception as e:
@@ -674,28 +639,22 @@ class LogService:
             deleted_at__isnull=True,
         ).delete()
 
-        # 4. 添付ファイルの紐付け削除
-        old_attachment_rels = R_LogCommentAttachment.objects.filter(
-            log_comment=log_comment,
-            deleted_at__isnull=True,
-        ).select_related("file_resource")
-        old_attachment_file_paths = [
-            rel.file_resource.file.name 
-            for rel in old_attachment_rels 
-            if rel.file_resource and rel.file_resource.file
+        # 4. 添付リソースの取得(削除用)
+        old_resources = [
+            rel.file_resource 
+            for rel in R_LogCommentAttachment.objects.filter(log_comment=log_comment, deleted_at__isnull=True).select_related("file_resource")
+            if rel.file_resource
         ]
+        
         try:
-            # 古い添付ファイルレコードを削除
-            old_attachment_rels.delete()
-
-            # 5. 監査用情報の更新
+            # 5. 監査用情報の更新と論理削除
             log_comment.updated_by = user
             log_comment.updated_method = kino_id
             log_comment.deleted_at = date_now
             log_comment.save()
 
-            # 6. 旧実ファイルの物理削除(成功時)
-            self._delete_attachment_files(old_attachment_file_paths)
+            # 6. 添付ファイルの物理削除(成功時のみ実行)
+            self.storage_service.delete_resources(old_resources)
 
             return log_comment
         except Exception as e:

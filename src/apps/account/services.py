@@ -543,23 +543,14 @@ class AccountService:
             upload_path = None
 
             if validated_data.get("icon"):
-                # ストレージへアップロード
-                upload_path = self.storage_service.upload_file(
-                    file_data=validated_data["icon"].file,
+                # StorageServiceの高機能メソッドを使用
+                new_icon_instance = self.storage_service.upload_resource(
+                    user=user,
+                    kino_id=kino_id,
+                    file_obj=validated_data["icon"],
                     folder_path="profiles/icons",
-                    original_filename=validated_data["icon"].name,
-                )
-
-                # ファイルリソースレコード作成
-                new_icon_instance = T_FileResource.objects.create(
                     file_type=T_FileResource.FileType.IMAGE,
-                    file=upload_path,
                     file_name=f"user_{user.id}_icon",
-                    file_size=validated_data["icon"].size,
-                    created_by=user,
-                    created_method=kino_id,
-                    updated_by=user,
-                    updated_method=kino_id,
                 )
                 profile.icon = new_icon_instance
 
@@ -582,16 +573,15 @@ class AccountService:
 
             # 5. 旧アイコンの物理削除(更新に成功した場合のみ)
             if new_icon_instance and old_icon_instance:
-                if old_icon_instance.file:
-                    self.storage_service.delete_file(old_icon_instance.file.name)
-                old_icon_instance.delete()
+                self.storage_service.delete_resources([old_icon_instance])
 
             return profile
 
         except Exception as e:
-            # アップロード済みのファイルをロールバック(削除)
-            if upload_path:
-                self.storage_service.delete_file(upload_path)
+            # 失敗時はStorageService側でクリーンアップされるため、ここではraiseのみでOK
+            # (ただしnew_icon_instance作成後にこのブロックに来た場合は、必要に応じて削除を検討)
+            if new_icon_instance:
+                self.storage_service.delete_resources([new_icon_instance])
             raise e
 
     # ------------------------------------------------------------------
