@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import List, Optional, Union
 from django.db import transaction, Prefetch
 from django.db.models import Count, Q, QuerySet
+from collections import defaultdict
 
 # --- アカウントモジュール ---
 from apps.account.models import M_User
@@ -131,18 +132,6 @@ class LogService:
                 "log_r_log_reaction_set",
                 queryset=R_LogReaction.objects.filter(deleted_at__isnull=True)
             ),
-            # タグの一括取得
-            # Prefetchを使用することで、タグの削除チェックなどを行わずに、
-            # 未削除のタグのみを事前に取得し、シリアライザ内でのループ処理時にN+1が発生しないようにする
-            Prefetch(
-                "tag_r_itemtag_set",
-                queryset=R_ItemTag.objects.filter(
-                    item_type=R_ItemTag.ItemType.LOG,
-                    deleted_at__isnull=True,
-                    tag__deleted_at__isnull=True,
-                ).select_related("tag").order_by("tag__name"),
-                to_attr="tags",
-            ),
         )
 
         # フィルタリング
@@ -154,7 +143,28 @@ class LogService:
         # ソート
         queryset = queryset.order_by("-date", "-created_at")
 
-        return queryset
+        # 手動でのタグ一括取得 (ポリモーフィック構造への対応/N+1対策)
+        logs = list(queryset)
+        if logs:
+            log_ids = [str(l.id) for l in logs]
+            # R_ItemTag を介してタグを一括取得
+            item_tags = R_ItemTag.objects.filter(
+                item_type=R_ItemTag.ItemType.LOG,
+                item_id__in=log_ids,
+                deleted_at__isnull=True,
+                tag__deleted_at__isnull=True
+            ).select_related("tag")
+            
+            tag_map = defaultdict(list)
+            for it in item_tags:
+                tag_map[str(it.item_id)].append(it.tag)
+            
+            for l in logs:
+                # オブジェクトに属性としてセットする (シリアライザで利用可能)
+                l.prefetched_tags = tag_map.get(str(l.id), [])
+
+        return logs
+
 
     # ログコメント一覧取得
     def list_log_comment(
@@ -241,19 +251,17 @@ class LogService:
                         )
                     )
                 ),
-                # タグの一括取得
-                # Prefetchを使用することで、タグの削除チェックなどを行わずに、
-                # 未削除のタグのみを事前に取得し、シリアライザ内でのループ処理時にN+1が発生しないようにする
-                Prefetch(
-                    "tag_r_itemtag_set",
-                    queryset=R_ItemTag.objects.filter(
-                        item_type=R_ItemTag.ItemType.LOG,
-                        deleted_at__isnull=True,
-                        tag__deleted_at__isnull=True,
-                    ).select_related("tag").order_by("tag__name"),
-                    to_attr="tags",
-                ),
+                # タグの一括取得は detail_log 内で個別に行うため、ここでは行わない
             ).get()
+
+            # 手動でのタグ取得
+            log.prefetched_tags = list(M_Tag.objects.filter(
+                tag_r_itemtag_set__item_type=R_ItemTag.ItemType.LOG,
+                tag_r_itemtag_set__item_id=log.id,
+                deleted_at__isnull=True,
+            ))
+
+            return log
         except T_Log.DoesNotExist:
             raise LogNotFoundError()
 

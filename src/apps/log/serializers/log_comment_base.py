@@ -119,16 +119,5 @@ class LogCommentFullResponseSerializer(LogCommentBaseSerializer):
 
     def get_reaction_counts(self, obj):
         """プリフェッチされたデータをメモリ上で集計する(N+1対策)"""
-        # Prefetchにより、既に全件ロードされていることを前提とする
-        reactions = obj.log_r_log_comment_reaction_set.all()
-        counts = {}
-        for r in reactions:
-            emoji_id = str(r.emoji_id)
-            counts[emoji_id] = counts.get(emoji_id, 0) + 1
-        data = [
-            {"emoji_id": emoji_id, "count": count} 
-            for emoji_id, count in sorted(counts.items(), key=lambda x: x[1], reverse=True)
-        ]
-        # LogCommentReactionCountSerializer を使って絵文字情報を展開（コンテキストキャッシュが効く）
-        return LogCommentReactionCountSerializer(data, many=True, context=self.context).data
-
+        # Mini側と同じロジックを使用
+        return LogCommentMiniResponseSerializer.get_reaction_counts(self, obj)

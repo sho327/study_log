@@ -78,8 +78,8 @@ class R_ItemTag(BaseModel):
         max_length=20,
         choices=ItemType.choices,
     )
-    # タグ(削除/物理削除の場合はCASCADE)
-    item_id = models.BigIntegerField(
+    # アイテムID (トランザクションがUUIDを使用するため、UUIDFieldで保持)
+    item_id = models.UUIDField(
         db_column="item_id",
         verbose_name="アイテムID",
         db_comment="アイテムID",

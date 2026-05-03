@@ -71,7 +71,8 @@ class LogMiniResponseSerializer(LogBaseSerializer):
     )
     
     # タグの展開(モデルのpropertyを使用)
-    tags = MasterTagMiniResponseSerializer(many=True, read_only=True)
+    # サービス層で手動プリフェッチ(prefetched_tags)されている場合はそれを利用する
+    tags = serializers.SerializerMethodField()
     
     # 投稿者情報
     user = AccountMiniResponseSerializer(read_only=True)
@@ -98,6 +99,12 @@ class LogMiniResponseSerializer(LogBaseSerializer):
             "reaction_counts",
             "created_at",
         ]
+
+    def get_tags(self, obj):
+        """手動プリフェッチされたタグを優先的に返す"""
+        tags = getattr(obj, "prefetched_tags", obj.tags)
+        return MasterTagMiniResponseSerializer(tags, many=True, context=self.context).data
+
 
     def get_reaction_counts(self, obj):
         """プリフェッチされたデータをメモリ上で集計する(N+1対策)"""
@@ -130,9 +137,10 @@ class LogFullResponseSerializer(LogBaseSerializer):
     )
     
     # タグの展開(モデルのpropertyを使用)
-    tags = MasterTagMiniResponseSerializer(many=True, read_only=True)
+    tags = serializers.SerializerMethodField()
     # 投稿者情報
     user = AccountMiniResponseSerializer(read_only=True)
+
 
     # 集計情報の展開
     # シリアライザで計算するとN+1問題で重くなるため、ReadOnlyFieldとして定義し
@@ -151,20 +159,15 @@ class LogFullResponseSerializer(LogBaseSerializer):
     class Meta(LogBaseSerializer.Meta):
         fields = "__all__"
 
+    def get_tags(self, obj):
+        """手動プリフェッチされたタグを優先的に返す"""
+        return LogMiniResponseSerializer.get_tags(self, obj)
+
     def get_reaction_counts(self, obj):
         """プリフェッチされたデータをメモリ上で集計する(N+1対策)"""
-        # Prefetchにより、既に全件ロードされていることを前提とする
-        reactions = obj.log_r_log_reaction_set.all()
-        counts = {}
-        for r in reactions:
-            emoji_id = str(r.emoji_id)
-            counts[emoji_id] = counts.get(emoji_id, 0) + 1
-        data = [
-            {"emoji_id": emoji_id, "count": count} 
-            for emoji_id, count in sorted(counts.items(), key=lambda x: x[1], reverse=True)
-        ]
-        # LogReactionCountSerializer を使って絵文字情報を展開（コンテキストキャッシュが効く）
-        return LogReactionCountSerializer(data, many=True, context=self.context).data
+        # Mini側と同じロジックを使用
+        return LogMiniResponseSerializer.get_reaction_counts(self, obj)
+
 
 
 
