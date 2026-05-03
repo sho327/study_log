@@ -42,7 +42,9 @@ class TagService:
         return R_ItemTag.objects.filter(
             item_type=item_type,
             item_id=item_id,
-        ).select_related("tag")
+            deleted_at__isnull=True,
+            tag__deleted_at__isnull=True,
+        ).select_related("tag").order_by("tag__name")
 
     # ------------------------------------------------------------------
     # ※その他M_Tagに関するCRUDはModelViewSetで行う※
@@ -51,50 +53,82 @@ class TagService:
     # ------------------------------------------------------------------
     # その他サービス
     # ------------------------------------------------------------------
-    def add_tags(self, item_type: str, item_id: int, tags: List[M_Tag]):
-        """
-        タグを追加する。
-        """
-        for tag in tags:
-            R_ItemTag.objects.create(
-                item_type=item_type,
-                item_id=item_id,
-                tag=tag,
-            )
-
     def add_tags(self, item_type: str, item_id: int, tag_names: List[str]):
         """
         タグを追加する。
         """
-        for tag_name in tag_names:
-            tag, created = M_Tag.objects.get_or_create(
+        # 重複タグの削除(小文字変換/前後の空白削除/空文字列削除)
+        unique_tag_names = list(set([tag.strip().lower() for tag in tag_names if tag and tag.strip()]))
+
+        # 重複タグが存在しない場合は終了
+        if not unique_tag_names:
+            return
+
+        # タグの取得または作成
+        tags = []
+        for tag_name in unique_tag_names:
+            tag = M_Tag.objects.filter(
                 name=tag_name,
-            )
-            R_ItemTag.objects.create(
-                item_type=item_type,
-                item_id=item_id,
-                tag=tag,
-            )
-    
-    def remove_tags(self, item_type: str, item_id: int, tags: List[M_Tag]):
-        """
-        タグを削除する。
-        """
-        R_ItemTag.objects.filter(
+                deleted_at__isnull=True,
+            ).first()
+            if not tag:
+                tag = M_Tag.objects.create(
+                    name=tag_name,
+                )
+            tags.append(tag)
+
+        # すでに設定済みタグを弾く
+        existing_tags = R_ItemTag.objects.filter(
             item_type=item_type,
             item_id=item_id,
             tag__in=tags,
-        ).delete()
+            deleted_at__isnull=True,
+            tag__deleted_at__isnull=True,
+        ).values_list("tag_id", flat=True)
+        tags = [tag for tag in tags if tag.id not in existing_tags]
 
+        # tagsが存在するかチェック
+        if not tags:
+            return
+
+        # tagsを関連付け
+        R_ItemTag.objects.bulk_create(
+            [
+                R_ItemTag(
+                    item_type=item_type,
+                    item_id=item_id,
+                    tag=tag,
+                )
+                for tag in tags
+            ]
+        )
+    
     def remove_tags(self, item_type: str, item_id: int, tag_names: List[str]):
         """
         タグを削除する。
         """
-        tags = M_Tag.objects.filter(name__in=tag_names)
+        # 重複タグの削除(小文字変換/前後の空白削除/空文字列削除)
+        unique_tag_names = list(set([tag.strip().lower() for tag in tag_names if tag and tag.strip()]))
+
+        # 重複タグが存在しない場合は終了
+        if not unique_tag_names:
+            return
+        # タグの存在チェック
+        tags = M_Tag.objects.filter(
+            name__in=unique_tag_names,
+            deleted_at__isnull=True,
+        )
+        # tagsが存在するかチェック
+        if not tags:
+            return
+
+        # tagsを削除
         R_ItemTag.objects.filter(
             item_type=item_type,
             item_id=item_id,
             tag__in=tags,
+            deleted_at__isnull=True,
+            tag__deleted_at__isnull=True,
         ).delete()
 
     
