@@ -70,7 +70,7 @@ class LogService:
                     # 2. 画像リソースの作成
                     file_resource = T_FileResource.objects.create(
                         file_type=T_FileResource.FileType.FILE,
-                        file_data=path,
+                        file=path,
                         file_name=f"{prefix}_attachments_{parent_instance.id}_{index}",
                         created_by=user,
                         created_method=kino_id,
@@ -114,8 +114,8 @@ class LogService:
         """実ファイルを物理削除する"""
         for resource in file_resources:
             try:
-                if resource.file_data:
-                    self.storage_service.delete_file(resource.file_data)
+                if resource.file:
+                    self.storage_service.delete_file(resource.file.name)
             except Exception as e:
                 log_output_by_msg_id(
                     log_id="MSGW001",
@@ -419,7 +419,11 @@ class LogService:
             log=log,
             deleted_at__isnull=True,
         ).select_related("file_resource")
-        old_attachment_file_paths = [rel.file_resource.file_path for rel in old_attachment_rels]        
+        old_attachment_file_paths = [
+            rel.file_resource.file.name 
+            for rel in old_attachment_rels 
+            if rel.file_resource and rel.file_resource.file
+        ]
         upload_paths = []
         try:
             # 3-1. 古い添付ファイルレコードを削除
@@ -497,7 +501,11 @@ class LogService:
             log_comment=log_comment,
             deleted_at__isnull=True,
         ).select_related("file_resource")
-        old_attachment_file_paths = [rel.file_resource.file_path for rel in old_attachment_rels]        
+        old_attachment_file_paths = [
+            rel.file_resource.file.name 
+            for rel in old_attachment_rels 
+            if rel.file_resource and rel.file_resource.file
+        ]
         upload_paths = []
         try:
             # 3-1. 古い添付ファイルレコードを削除
@@ -564,24 +572,66 @@ class LogService:
             deleted_at__isnull=True,
         ).delete()
 
-        # 4. 添付ファイルの紐付け削除
+        # 4. コメントに関連するデータの論理削除
+        comments = T_LogComment.objects.filter(
+            log=log,
+            deleted_at__isnull=True,
+        )
+        comment_ids = list(comments.values_list("id", flat=True))
+        
+        comment_file_paths = []
+        if comment_ids:
+            # 4-1. コメントのリアクション削除
+            R_LogCommentReaction.objects.filter(
+                log_comment_id__in=comment_ids,
+                deleted_at__isnull=True,
+            ).delete()
+
+            # 4-2. コメントの添付ファイルレコード削除とファイルパス収集
+            comment_attachment_rels = R_LogCommentAttachment.objects.filter(
+                log_comment_id__in=comment_ids,
+                deleted_at__isnull=True,
+            ).select_related("file_resource")
+            
+            comment_file_paths = [
+                rel.file_resource.file.name 
+                for rel in comment_attachment_rels 
+                if rel.file_resource and rel.file_resource.file
+            ]
+            comment_attachment_rels.delete()
+
+            # 4-3. コメント本体の論理削除
+            comments.update(
+                updated_by=user,
+                updated_method=kino_id,
+                deleted_at=date_now,
+            )
+
+        # 5. ログ自体の添付ファイルの紐付け削除
         old_attachment_rels = R_LogAttachment.objects.filter(
             log=log,
             deleted_at__isnull=True,
         ).select_related("file_resource")
-        old_attachment_file_paths = [rel.file_resource.file_path for rel in old_attachment_rels]
+        old_attachment_file_paths = [
+            rel.file_resource.file.name 
+            for rel in old_attachment_rels 
+            if rel.file_resource and rel.file_resource.file
+        ]
+
         try:
-            # 古い添付ファイルレコードを削除
+            # 添付ファイルレコードを削除
             old_attachment_rels.delete()
 
-            # 5. 監査用情報の更新
+            # 6. 監査用情報の更新
             log.updated_by = user
             log.updated_method = kino_id
             log.deleted_at = date_now
             log.save()
 
-            # 6. 旧実ファイルの物理削除(成功時)
-            self._delete_physical_files(old_attachment_file_paths)
+            # 7. 旧実ファイルの物理削除(成功時)
+            # ログのファイル + 全コメントのファイル
+            all_delete_paths = old_attachment_file_paths + comment_file_paths
+            self._delete_physical_files(all_delete_paths)
 
             return log
         except Exception as e:
@@ -633,7 +683,11 @@ class LogService:
             log_comment=log_comment,
             deleted_at__isnull=True,
         ).select_related("file_resource")
-        old_attachment_file_paths = [rel.file_resource.file_path for rel in old_attachment_rels]        
+        old_attachment_file_paths = [
+            rel.file_resource.file.name 
+            for rel in old_attachment_rels 
+            if rel.file_resource and rel.file_resource.file
+        ]
         try:
             # 古い添付ファイルレコードを削除
             old_attachment_rels.delete()
