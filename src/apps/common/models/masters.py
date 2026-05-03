@@ -62,7 +62,7 @@ class M_Emoji(BaseModel):
 
 
 # タグマスタ
-class M_Tag(models.Model):
+class M_Tag(BaseModel):
     # ---------- Consts ----------
     # ---------- Fields ----------
     # ID(URLに使用される可能性もあるため、予測できないUUIDで保持する)

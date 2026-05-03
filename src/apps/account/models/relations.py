@@ -8,7 +8,7 @@ from simple_history.models import HistoricalRecords
 from core.models import BaseModel
 
 # フォローリレーション
-class R_Follow(models.Model):
+class R_Follow(BaseModel):
     # フォロワー/ユーザマスタ(削除/物理削除の場合はCASCADE)
     follower = models.ForeignKey(
         "account.M_User",  # 循環参照対策(文字で定義することで、後での紐付けとする)

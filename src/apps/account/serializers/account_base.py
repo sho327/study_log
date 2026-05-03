@@ -1,11 +1,12 @@
 from rest_framework import serializers
 from django.db.models import Sum
 
-from apps.common.serializer.file_resource_base import FileResourceMiniResponseSerializer
+# --- 共通モジュール ---
+from apps.common.serializers.file_resource_base import FileResourceMiniResponseSerializer
 
-# --- プレイリストモジュール ---
+# --- アカウントモジュール ---
 from apps.account.models import M_User, T_Profile
-from apps.playlist.serializer.playlist_track_base import PlaylistTrackMiniResponseSerializer
+
 
 class UserBaseSerializer(serializers.ModelSerializer):
     """
