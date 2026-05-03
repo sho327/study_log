@@ -18,7 +18,7 @@ class AbstractAttachment(BaseModel):
         verbose_name="ファイルリソース",
         db_comment="ファイルリソース",
         on_delete=models.CASCADE,
-        related_name="file_resource_t_abstract_attachement_set",
+        related_name="file_resource_%(class)s_set",
         null=True,
         blank=True,
     )
