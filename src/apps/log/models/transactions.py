@@ -4,12 +4,13 @@ from django.conf import settings
 from django.db import models
 from django.db.models import Q, UniqueConstraint
 from simple_history.models import HistoricalRecords
+from django.db.models import Count
 
 # --- コアモジュール ---
 from core.models import BaseModel
 
 # --- 共通モジュール ---
-from apps.common.models import AbstractAttachment, M_Tag
+from apps.common.models import AbstractAttachment, M_Tag, R_ItemTag
 
 
 # ログトラン
@@ -100,11 +101,24 @@ class T_Log(BaseModel):
 
     @property
     def tags(self):
+        """紐付いているタグのクエリセットを返す"""
         return M_Tag.objects.filter(
-            tag_r_itemtag_set__item_type=ItemType.LOG,
+            tag_r_itemtag_set__item_type=R_ItemTag.ItemType.LOG,
             tag_r_itemtag_set__item_id=self.id,
             deleted_at__isnull=True,
         )
+
+    @property
+    def comment_count(self):
+        """有効なコメント数を返す"""
+        return self.log_t_log_comment_set.filter(deleted_at__isnull=True).count()
+
+    @property
+    def reaction_counts(self):
+        """絵文字ごとのリアクション数を集計して返す"""
+        return self.log_r_log_reaction_set.filter(
+            deleted_at__isnull=True
+        ).values("emoji_id").annotate(count=Count("emoji_id")).order_by("-count")
 
     # 履歴管理不要: django-simple-historyを使用しない
     # history = HistoricalRecords()
@@ -148,7 +162,7 @@ class T_LogComment(BaseModel):
         db_comment="ログトラン",
         on_delete=models.CASCADE,
         # 逆参照名を定義(例: 「参照先インスタンス.[related_name]」/通常参照は「本インスタンス.参照先モデル名(_id)」で取得可能)
-        related_name="log_r_log_reaction_set",
+        related_name="log_t_log_comment_set",
     )
     # 内容
     content = models.TextField(
@@ -180,6 +194,13 @@ class T_LogComment(BaseModel):
         # 逆参照名を定義(例: 「参照先インスタンス.[related_name]」/通常参照は「本インスタンス.参照先モデル名(_id)」で取得可能)
         related_name="reactions_t_log_comment_set",
     )
+
+    @property
+    def reaction_counts(self):
+        """絵文字ごとのリアクション数を集計して返す"""
+        return self.log_r_log_comment_reaction_set.filter(
+            deleted_at__isnull=True
+        ).values("emoji_id").annotate(count=Count("emoji_id")).order_by("-count")
 
     # django-simple-historyを使用
     history = HistoricalRecords()

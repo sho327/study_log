@@ -4,7 +4,9 @@ from rest_framework import serializers
 from apps.account.serializers.account_base import AccountMiniResponseSerializer
 
 # --- 共通モジュール ---
+from apps.common.models import M_Emoji
 from apps.common.serializers.file_resource_base import FileResourceMiniResponseSerializer
+from apps.common.serializers.master_emoji_base import MasterEmojiMiniResponseSerializer
 
 # --- ログモジュール ---
 from apps.log.models import T_LogComment
@@ -29,6 +31,21 @@ class LogCommentAttachmentSerializer(serializers.Serializer):
         return FileResourceMiniResponseSerializer(instance.file_resource, context=self.context).data
 
 
+class LogCommentReactionCountSerializer(serializers.Serializer):
+    """
+    リアクション集計結果のシリアライズ用
+    """
+    emoji = serializers.SerializerMethodField()
+    count = serializers.IntegerField()
+
+    def get_emoji(self, obj):
+        # emoji_id からマスター情報を取得して展開
+        emoji = M_Emoji.objects.filter(id=obj["emoji_id"]).first()
+        if not emoji:
+            return None
+        return MasterEmojiMiniResponseSerializer(emoji, context=self.context).data
+
+
 class LogCommentMiniResponseSerializer(LogCommentBaseSerializer):
     """
     【最小構成】ログコメント一覧用
@@ -43,6 +60,9 @@ class LogCommentMiniResponseSerializer(LogCommentBaseSerializer):
     # 投稿者情報
     user = AccountMiniResponseSerializer(source="created_by", read_only=True)
 
+    # リアクション集計
+    reaction_counts = LogCommentReactionCountSerializer(many=True, read_only=True)
+
     class Meta(LogCommentBaseSerializer.Meta):
         # 画面に並べる最低限の項目に絞る
         fields = [
@@ -50,6 +70,7 @@ class LogCommentMiniResponseSerializer(LogCommentBaseSerializer):
             "content", 
             "attachments",
             "user",
+            "reaction_counts",
             "created_at",
         ]
 
@@ -65,6 +86,10 @@ class LogCommentFullResponseSerializer(LogCommentBaseSerializer):
     )
     user = AccountMiniResponseSerializer(source="created_by", read_only=True)
 
+    # リアクション集計
+    reaction_counts = LogCommentReactionCountSerializer(many=True, read_only=True)
+
     class Meta(LogCommentBaseSerializer.Meta):
         fields = "__all__"
+
 
