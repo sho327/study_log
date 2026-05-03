@@ -553,8 +553,9 @@ class AccountService:
                 # ファイルリソースレコード作成
                 new_icon_instance = T_FileResource.objects.create(
                     file_type=T_FileResource.FileType.IMAGE,
-                    file_data=upload_path,
+                    file=upload_path,
                     file_name=f"user_{user.id}_icon",
+                    file_size=validated_data["icon"].size,
                     created_by=user,
                     created_method=kino_id,
                     updated_by=user,
@@ -581,8 +582,8 @@ class AccountService:
 
             # 5. 旧アイコンの物理削除(更新に成功した場合のみ)
             if new_icon_instance and old_icon_instance:
-                if old_icon_instance.file_data:
-                    self.storage_service.delete_file(old_icon_instance.file_data.name)
+                if old_icon_instance.file:
+                    self.storage_service.delete_file(old_icon_instance.file.name)
                 old_icon_instance.delete()
 
             return profile

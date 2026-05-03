@@ -72,6 +72,7 @@ class LogService:
                         file_type=T_FileResource.FileType.FILE,
                         file=path,
                         file_name=f"{prefix}_attachments_{parent_instance.id}_{index}",
+                        file_size=file_obj.size,
                         created_by=user,
                         created_method=kino_id,
                         updated_by=user,

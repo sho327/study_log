@@ -62,7 +62,12 @@ class T_FileResource(BaseModel):
         choices=FileType.choices,
         default=FileType.OTHER,
     )
-    # ファイル
+    # ファイル(以下はFileFieldにて用意されている属性)
+    #  name(相対パス): DBに保存されている文字列そのもの(例: logs/2026/05/abc.jpg)/MEDIA_ROOTからの相対パス
+    #  path(絶対パス): OS上のフルパス(例: /Users/user/project/media/logs/2026/05/abc.jpg)
+    #  url(URL): ブラウザからアクセスするためのURL(例: /media/logs/2026/05/abc.jpg)
+    #  size(数値): ファイルサイズ(バイト単位)
+    #  width, height(数値): 画像の場合の幅と高さ(ピクセル単位)
     file = models.FileField(
         db_column="file",
         verbose_name="ファイル",
