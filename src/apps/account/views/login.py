@@ -14,7 +14,7 @@ from core.exceptions.exceptions import ApplicationError, ValidationError
 from core.views import BaseAPIView
 
 # --- アカウントモジュール ---
-from apps.account.serializer.login import LoginRequestSerializer, LoginResponseSerializer
+from apps.account.serializers.login import LoginRequestSerializer, LoginResponseSerializer
 from apps.account.services import AccountService
 
 
@@ -91,6 +91,7 @@ class LoginView(BaseAPIView):
         # 4. レスポンス作成(HttpOnlyCookieへのリフレッシュトークン情報の保存)
         res_serializer = LoginResponseSerializer(data={
             "access_token": str(result["access_token"]),
+            "user": result["user"]
         })
         res_serializer.is_valid(raise_exception=True)
         response = self.get_success_map_response(res_serializer.data)

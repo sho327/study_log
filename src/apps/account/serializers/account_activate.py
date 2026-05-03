@@ -6,8 +6,3 @@ class AccountActivateRequestSerializer(serializers.Serializer):
     """
     token = serializers.CharField(required=True, help_text="アクティベート用トークン")
 
-class AccountActivateResponseSerializer(serializers.Serializer):
-    """
-    出力：フロントエンドへ返すデータの定義
-    """
-    pass

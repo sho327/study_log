@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from apps.account.serializers.account_base import UserMeResponseSerializer
 
 class LoginRequestSerializer(serializers.Serializer):
     """
@@ -13,3 +14,4 @@ class LoginResponseSerializer(serializers.Serializer):
     ※ refresh_token は Cookie 管理のため、ここには含めない
     """
     access_token = serializers.CharField(help_text="アクセストークン(JWT等)")
+    user = UserMeResponseSerializer()

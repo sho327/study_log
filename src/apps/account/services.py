@@ -1,5 +1,5 @@
 import secrets, hashlib, uuid
-from typing import Dict
+from typing import Dict, Any
 from datetime import datetime
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.models import update_last_login
@@ -13,6 +13,7 @@ from core.utils.log_helpers import log_output_by_msg_id
 
 # --- 共通モジュール ---
 from apps.common.services.email_service import EmailService
+from apps.common.services.storage_service import StorageService
 
 # --- アカウントモジュール ---
 from apps.account.exceptions import (
@@ -23,6 +24,7 @@ from apps.account.exceptions import (
     TokenExpiredOrNotFoundError,
     UserAlreadyActiveError,
     UserNotFoundError,
+    ProfileNotFoundError,
 )
 from apps.account.models import M_User, T_UserToken, T_LoginHistory, T_Profile
 
@@ -38,6 +40,7 @@ class AccountService:
     def __init__(self):
         # サービス内で別のサービスを保持する
         self.email_service = EmailService()
+        self.storage_service = StorageService()
 
     # ------------------------------------------------------------------
     # ユーザトークン作成処理
@@ -243,6 +246,8 @@ class AccountService:
         t_user_token_instance.updated_method = kino_id
         t_user_token_instance.deleted_at = date_now
         t_user_token_instance.save()
+
+        return m_user_instance
     
     # ------------------------------------------------------------------
     # ログイン処理(JWT発行)
@@ -324,6 +329,7 @@ class AccountService:
         return {
             "access_token": str(refresh.access_token),
             "refresh_token": str(refresh),
+            "user": m_user_instance2,
         }
 
     # ------------------------------------------------------------------
@@ -451,8 +457,7 @@ class AccountService:
         #    # from django.contrib.sessions.models import Session
         #    # Session.objects.filter(expire_date__gte=timezone.now(), session_key__in=Session.objects.filter(session_key=user.pk).values_list('session_key', flat=True)).delete()
         # ------------------------------------------------------------------
-
-        return m_user_instance
+        # return m_user_instance
 
     # ------------------------------------------------------------------
     # 退会処理(論理削除)
@@ -495,3 +500,127 @@ class AccountService:
         # 4. 必要であれば、ここでリフレッシュトークンのブラックリスト化などを行う
         # SimpleJWTを使用している場合、OutstandingToken等から削除するロジックをここに入れる
         return None
+    
+    # ------------------------------------------------------------------
+    # 初期プロフィール設定
+    # ------------------------------------------------------------------
+    def initial_setting(
+        self,
+        date_now: datetime,
+        kino_id: str,
+        user: M_User,
+        validate_data: Dict[str, Any],
+    ) -> T_Profile:
+        """
+        ログイン後の初期設定(プロフィール情報の登録とフラグ更新)を行う。
+        Args:
+            date_now (datetime): 現在日時
+            kino_id (str): 処理実行ユーザーID
+            user (M_User): 対象ユーザーモデル
+            validate_data (Dict[str, Any]): バリデーション済みリクエストデータ
+        Returns:
+            T_Profile: 初期設定完了後のプロフィールモデル
+        Raises:
+            UserNotFoundError: ユーザーが存在しない場合
+        """
+        try:
+            # 1. プロフィールレコードの取得(OneToOneなので.user_t_profile_setでアクセス)
+            # レコードが存在しない場合は作成する
+            profile, created = T_Profile.objects.select_for_update().get_or_create(
+                user=user,
+                defaults={
+                    "user_id_display": validated_data.get("user_id_display", str(user.id)),
+                    "created_by": user,
+                    "created_method": kino_id,
+                    "updated_by": user,
+                    "updated_method": kino_id,
+                },
+            )
+
+            # 2. アイコン画像の保存
+            old_icon_instance = profile.icon
+            new_icon_instance = None
+            upload_path = None
+
+            if validated_data.get("icon"):
+                # ストレージへアップロード
+                upload_path = self.storage_service.upload_file(
+                    file_data=validated_data["icon"].file,
+                    folder_path="profiles/icons",
+                    original_filename=validated_data["icon"].name,
+                )
+
+                # ファイルリソースレコード作成
+                new_icon_instance = T_FileResource.objects.create(
+                    file_type=T_FileResource.FileType.IMAGE,
+                    file_data=upload_path,
+                    file_name=f"user_{user.id}_icon",
+                    created_by=user,
+                    created_method=kino_id,
+                    updated_by=user,
+                    updated_method=kino_id,
+                )
+                profile.icon = new_icon_instance
+
+            # 3. 各種プロフィールの更新
+            if "user_id_display" in validated_data:
+                profile.user_id_display = validated_data["user_id_display"]
+            
+            if "display_name" in validated_data:
+                profile.display_name = validated_data["display_name"]
+            
+            if "bio" in validated_data:
+                profile.bio = validated_data["bio"]
+
+            # 4. 初期設定完了フラグを立てる
+            profile.is_setup_completed = True
+            
+            profile.updated_by = user
+            profile.updated_method = kino_id
+            profile.save()
+
+            # 5. 旧アイコンの物理削除(更新に成功した場合のみ)
+            if new_icon_instance and old_icon_instance:
+                if old_icon_instance.file_data:
+                    self.storage_service.delete_file(old_icon_instance.file_data.name)
+                old_icon_instance.delete()
+
+            return profile
+
+        except Exception as e:
+            # アップロード済みのファイルをロールバック(削除)
+            if upload_path:
+                self.storage_service.delete_file(upload_path)
+            raise e
+
+    # ------------------------------------------------------------------
+    # 現在のユーザ取得
+    # ------------------------------------------------------------------
+    def current_user_get(
+        self,
+        date_now: datetime,
+        kino_id: str,
+        user: M_User,
+    ) -> M_User:
+        """
+        現在のユーザー情報を取得する。
+        Args:
+            date_now (datetime): 現在日時
+            kino_id (str): 処理実行ユーザーID
+            user (M_User): 対象ユーザーモデル
+        Returns:
+            M_User: 対象ユーザーモデル
+        Raises:
+            UserNotFoundError: ユーザーが存在しない場合
+        """
+        # 1. ユーザの存在チェック
+        m_user_instance = M_User.objects.filter(id=user.id, deleted_at__isnull=True).first()
+        if not m_user_instance:
+            raise UserNotFoundError()
+        
+        # 2. ユーザープロフィールの取得
+        t_profile_instance = T_Profile.objects.filter(user=user, deleted_at__isnull=True).first()
+        if not t_profile_instance:
+            raise ProfileNotFoundError()
+        
+        return m_user_instance

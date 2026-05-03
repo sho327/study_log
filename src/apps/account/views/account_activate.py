@@ -12,7 +12,8 @@ from core.exceptions.exceptions import ApplicationError, ValidationError
 from core.views import BaseAPIView
 
 # --- アカウントモジュール ---
-from apps.account.serializer.account_activate import AccountActivateRequestSerializer, AccountActivateResponseSerializer
+from apps.account.serializers.account_base import UserMeResponseSerializer
+from apps.account.serializers.account_activate import AccountActivateRequestSerializer
 from apps.account.services import AccountService
 
 
@@ -59,17 +60,17 @@ class AccountActivateView(BaseAPIView):
         serializer = AccountActivateRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         # 3. アカウントアクティベート(サービス実行)
-        self.account_service.activate_user(
+        user = self.account_service.activate_user(
             date_now, 
             KINO_ID, 
             raw_token=serializer.validated_data.get("token")
         )
-        # 4. レスポンス作成（ここがポイント）
-        # 空であってもResponseSerializerを通す/「このAPIが何を返すか」がViewの最後を見れば一目でわかるようにする
-        # data=Noneまたは空辞書を渡すことで、executeAtだけが入ったレスポンスとなる
-        res_serializer = AccountActivateResponseSerializer({})
+        # 4. レスポンス作成
+        # Serializerでフィールドを直接指定しているため、
+        # 結果のオブジェクトをそのまま渡すだけで正しくJSONに変換される。
+        res_serializer = UserMeResponseSerializer(user)
         response = self.get_success_map_response(data=res_serializer.data)
-        # 4. 処理終了ログ出力(アプリケーションログ)
+        # 5. 処理終了ログ出力(アプリケーションログ)
         log_output_by_msg_id(log_id="MSGI004", params=[KINO_ID, str(response.data)], logger_name=LOG_METHOD.APPLICATION.value)
-        # 5. レスポンス返却
+        # 6. レスポンス返却
         return response

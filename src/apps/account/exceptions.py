@@ -23,6 +23,13 @@ class UserNotFoundError(AccountError):
     message = "User Not Found Error"
     detail = "指定されたユーザーアカウントが見つかりません。"
 
+class ProfileNotFoundError(AccountError):
+    """指定されたプロフィールが見つからない場合に発生"""
+    status_code = status.HTTP_404_NOT_FOUND
+    message_id = "ERR_ACC_102"
+    message = "Profile Not Found Error"
+    detail = "指定されたプロフィールアカウントが見つかりません。"
+
 class UserAlreadyActiveError(AccountError):
     """既に有効化済みのユーザーに対して再度アクティベーションを行おうとした場合に発生"""
     status_code = status.HTTP_400_BAD_REQUEST

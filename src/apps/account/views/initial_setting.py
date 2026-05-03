@@ -13,13 +13,14 @@ from core.views import BaseAPIView
 
 # --- アカウントモジュール ---
 from apps.account.services import AccountService
+from apps.account.serializers.initial_setting import InitialSettingRequestSerializer
+from apps.account.serializers.account_base import ProfileFullResponseSerializer
 
+KINO_ID = "initial-setting"
 
-KINO_ID = "account-withdraw"
-
-class AccountWithdrawView(BaseAPIView):
+class InitialSettingView(BaseAPIView):
     """
-    退会処理APIクラス
+    初期設定APIクラス
     Create
         Author: Kato Shogo
     """
@@ -43,7 +44,7 @@ class AccountWithdrawView(BaseAPIView):
             Author: Kato Shogo
         """
         try:
-            return self.account_withdraw(request, *args, **kwargs)
+            return self.initial_setting(request, *args, **kwargs)
         except ApplicationError:
             # ApplicationError関連はカスタムエラー処理が設定されている為そのまま親へスローする
             raise
@@ -54,9 +55,9 @@ class AccountWithdrawView(BaseAPIView):
             # その他想定外エラーの場合もAPIエラーとする
             raise ApplicationError() from e
     
-    def account_withdraw(self, request, *args, **kwargs):
+    def initial_setting(self, request, *args, **kwargs):
         """
-        アカウント退会処理
+        初期設定処理
         Args:
             request:  HTTPリクエスト
             *args:    引数
@@ -67,17 +68,22 @@ class AccountWithdrawView(BaseAPIView):
         date_now: datetime = convert_to_site_timezone(timezone.now())
         # 1. 処理開始ログ出力(アプリケーションログ)
         log_output_by_msg_id(log_id="MSGI003", params=[KINO_ID, ""], logger_name=LOG_METHOD.APPLICATION.value)
-        # 2. アカウント退会(サービス実行)
-        self.account_service.account_withdraw(
-            date_now, 
-            KINO_ID, 
-            request.user.id
+        # 2. リクエストデータ検証
+        initial_setting_serializer = InitialSettingRequestSerializer(data=request.data)
+        initial_setting_serializer.is_valid(raise_exception=True)
+        # 3. 初期設定(サービス実行)
+        result = self.account_service.initial_setting(
+            date_now=date_now,
+            kino_id=KINO_ID,
+            user=request.user,
+            **initial_setting_serializer.validated_data
         )
-        # 3. レスポンス作成
-        # 空であっても「このAPIが何を返すか」がViewの最後を見れば一目でわかるようにする
-        # data=Noneまたは空辞書を渡すことで、executeAtだけが入ったレスポンスとなる
-        response = self.get_success_map_response(data={})
-        # 4. 処理終了ログ出力(アプリケーションログ)
-        log_output_by_msg_id(log_id="MSGI004", params=[KINO_ID, ""], logger_name=LOG_METHOD.APPLICATION.value)
-        # 5. レスポンス返却
+        # 4. レスポンス作成
+        # Serializerでフィールドを直接指定しているため、
+        # 結果のオブジェクトをそのまま渡すだけで正しくJSONに変換される。
+        res_serializer = ProfileFullResponseSerializer(result)
+        response = self.get_success_map_response(res_serializer.data)
+        # 5. 処理終了ログ出力(アプリケーションログ)
+        log_output_by_msg_id(log_id="MSGI004", params=[KINO_ID, str(response.data)], logger_name=LOG_METHOD.APPLICATION.value)
+        # 6. レスポンス返却
         return response

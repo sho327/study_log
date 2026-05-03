@@ -16,8 +16,3 @@ class PasswordResetConfirmRequestSerializer(serializers.Serializer):
         help_text="新しいパスワード"
     )
 
-class PasswordResetConfirmResponseSerializer(serializers.Serializer):
-    """
-    出力：フロントエンドへ返すデータの定義
-    """
-    pass

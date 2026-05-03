@@ -13,13 +13,13 @@ from core.views import BaseAPIView
 
 # --- アカウントモジュール ---
 from apps.account.services import AccountService
+from apps.account.serializers.account_base import UserMeResponseSerializer
 
+KINO_ID = "current-user-get"
 
-KINO_ID = "account-withdraw"
-
-class AccountWithdrawView(BaseAPIView):
+class CurrentUserGetView(BaseAPIView):
     """
-    退会処理APIクラス
+    現在のユーザー情報を取得するAPIクラス
     Create
         Author: Kato Shogo
     """
@@ -27,10 +27,10 @@ class AccountWithdrawView(BaseAPIView):
     account_service = AccountService()
 
     @logging_process_with_sql
-    def post(self, request, *args, **kwargs):
+    def get(self, request, *args, **kwargs):
         """
-        POSTリクエストを受け付ける。
-        Method: POST
+        GETリクエストを受け付ける。
+        Method: GET
         Args:
             request:  HTTPリクエスト
             *args:    引数
@@ -43,7 +43,7 @@ class AccountWithdrawView(BaseAPIView):
             Author: Kato Shogo
         """
         try:
-            return self.account_withdraw(request, *args, **kwargs)
+            return self.current_user_get(request, *args, **kwargs)
         except ApplicationError:
             # ApplicationError関連はカスタムエラー処理が設定されている為そのまま親へスローする
             raise
@@ -54,9 +54,9 @@ class AccountWithdrawView(BaseAPIView):
             # その他想定外エラーの場合もAPIエラーとする
             raise ApplicationError() from e
     
-    def account_withdraw(self, request, *args, **kwargs):
+    def current_user_get(self, request, *args, **kwargs):
         """
-        アカウント退会処理
+        現在のユーザー情報を取得する
         Args:
             request:  HTTPリクエスト
             *args:    引数
@@ -67,17 +67,18 @@ class AccountWithdrawView(BaseAPIView):
         date_now: datetime = convert_to_site_timezone(timezone.now())
         # 1. 処理開始ログ出力(アプリケーションログ)
         log_output_by_msg_id(log_id="MSGI003", params=[KINO_ID, ""], logger_name=LOG_METHOD.APPLICATION.value)
-        # 2. アカウント退会(サービス実行)
-        self.account_service.account_withdraw(
-            date_now, 
-            KINO_ID, 
-            request.user.id
+        # 2. サービス実行(現在のユーザー情報を取得)
+        result: M_User = self.account_service.current_user_get(
+            date_now=date_now,
+            kino_id=KINO_ID,
+            user=request.user
         )
         # 3. レスポンス作成
-        # 空であっても「このAPIが何を返すか」がViewの最後を見れば一目でわかるようにする
-        # data=Noneまたは空辞書を渡すことで、executeAtだけが入ったレスポンスとなる
-        response = self.get_success_map_response(data={})
+        # Serializerでフィールドを直接指定しているため、
+        # 結果のオブジェクトをそのまま渡すだけで正しくJSONに変換される。
+        res_serializer = UserMeResponseSerializer(result)
+        response = self.get_success_map_response(res_serializer.data)
         # 4. 処理終了ログ出力(アプリケーションログ)
-        log_output_by_msg_id(log_id="MSGI004", params=[KINO_ID, ""], logger_name=LOG_METHOD.APPLICATION.value)
+        log_output_by_msg_id(log_id="MSGI004", params=[KINO_ID, str(response.data)], logger_name=LOG_METHOD.APPLICATION.value)
         # 5. レスポンス返却
         return response

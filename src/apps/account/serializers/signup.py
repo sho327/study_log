@@ -15,9 +15,3 @@ class SignupRequestSerializer(serializers.Serializer):
         # min_length=8,
         help_text="パスワード"
     )
-
-class SignupResponseSerializer(serializers.Serializer):
-    """
-    出力：フロントエンドへ返すデータの定義
-    """
-    pass

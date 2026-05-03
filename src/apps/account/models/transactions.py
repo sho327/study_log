@@ -272,6 +272,23 @@ class T_Profile(BaseModel):
                 name="unique_t_profile_user_id_active",
             ),
         ]
+    
+    # アカウント状態
+    def is_active(self):
+        return self.status_code == self.AccountStatus.ACTIVE
+    
+    def is_temporary_locked(self):
+        return self.status_code == self.AccountStatus.TEMPORARY_LOCKED
+    
+    def is_frozen(self):
+        return self.status_code == self.AccountStatus.FROZEN
+    
+    def is_withdrawn(self):
+        return self.status_code == self.AccountStatus.WITHDRAWN
+    
+    # ステータスコード(表示名を取得)
+    def get_status_code_display(self):
+        return self.AccountStatus(self.status_code).label
 
     def __str__(self):
         return f"{self.display_name or self.user_id_display}"

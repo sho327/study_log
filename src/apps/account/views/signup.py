@@ -12,7 +12,7 @@ from core.exceptions.exceptions import ApplicationError, ValidationError
 from core.views import BaseAPIView
 
 # --- アカウントモジュール ---
-from apps.account.serializer.signup import SignupRequestSerializer, SignupResponseSerializer
+from apps.account.serializers.signup import SignupRequestSerializer
 from apps.account.services import AccountService
 
 
@@ -77,12 +77,11 @@ class SignupView(BaseAPIView):
             kino_id=KINO_ID, 
             **serializer.validated_data,
         )
-        # 4. レスポンス作成（ここがポイント）
-        # 空であってもResponseSerializerを通す/「このAPIが何を返すか」がViewの最後を見れば一目でわかるようにする
+        # 4. レスポンス作成
+        # 空であっても「このAPIが何を返すか」がViewの最後を見れば一目でわかるようにする
         # data=Noneまたは空辞書を渡すことで、executeAtだけが入ったレスポンスとなる
-        res_serializer = SignupResponseSerializer({})
-        response = self.get_success_map_response(data=res_serializer.data)
-        # 4. 処理終了ログ出力(アプリケーションログ)
-        log_output_by_msg_id(log_id="MSGI004", params=[KINO_ID, str(response.data)], logger_name=LOG_METHOD.APPLICATION.value)
-        # 5. レスポンス返却
+        response = self.get_success_map_response(data={})
+        # 5. 処理終了ログ出力(アプリケーションログ)
+        log_output_by_msg_id(log_id="MSGI004", params=[KINO_ID, ""], logger_name=LOG_METHOD.APPLICATION.value)
+        # 6. レスポンス返却
         return response
