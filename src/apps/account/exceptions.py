@@ -79,3 +79,21 @@ class PasswordResetTokenInvalidError(AccountError):
     message_id = "ERR_AUTH_003"
     message = "Password Reset Token Invalid Error"
     detail = "無効なパスワードリセットリンクです。もう一度手続きを行ってください。"
+
+# --------------------------------------------------
+# フォロー・フォロワー系 (400, 404)
+# --------------------------------------------------
+
+class UserAlreadyFollowedError(AccountError):
+    """既にフォローしているユーザーに対して再度フォローしようとした場合に発生"""
+    status_code = status.HTTP_400_BAD_REQUEST
+    message_id = "ERR_ACC_201"
+    message = "User Already Followed Error"
+    detail = "このユーザーは既にフォローされています。"
+
+class UserAlreadyUnfollowedError(AccountError):
+    """既にフォローしていないユーザーに対して再度フォロー解除しようとした場合に発生"""
+    status_code = status.HTTP_400_BAD_REQUEST
+    message_id = "ERR_ACC_202"
+    message = "User Already Unfollowed Error"
+    detail = "このユーザーは既にフォロー解除されています。"

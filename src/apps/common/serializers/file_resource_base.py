@@ -1,4 +1,6 @@
 from rest_framework import serializers
+
+# --- 共通モジュール ---
 from apps.common.models import T_FileResource
 
 class FileResourceBaseSerializer(serializers.ModelSerializer):

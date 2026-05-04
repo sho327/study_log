@@ -467,7 +467,11 @@ class AccountService:
         ユーザーのアカウントを無効化し、論理削除を行う。
         """
         # 1. ユーザーと関連プロフィールの取得(select_relatedを設定しておくことで、後のプロフィール更新時のクエリを減らす)
-        user: M_User = User.objects.filter(id=user_id, deleted_at__isnull=True).select_related('user_t_profile_set').first()
+        user: M_User = User.objects.filter(
+            id=user_id,
+            deleted_at__isnull=True,
+        ).select_related('user_t_profile_set').first()
+        
         if not user:
             # 既に削除されているまたは存在しない場合
             raise UserNotFoundError()
@@ -615,3 +619,105 @@ class AccountService:
             raise ProfileNotFoundError()
         
         return m_user_instance
+
+    # ------------------------------------------------------------------
+    # ユーザフォロー
+    # ------------------------------------------------------------------
+    def user_follow(
+        self,
+        date_now: datetime,
+        kino_id: str,
+        user: M_User,
+        target_user_id: uuid.UUID,
+    ) -> None:
+        """
+        ユーザーをフォローする。
+        Args:
+            date_now (datetime): 現在日時
+            kino_id (str): 処理実行ユーザーID
+            user (M_User): フォローするユーザーモデル
+            target_user_id (uuid.UUID): フォローされるユーザーのID
+        Raises:
+            UserNotFoundError: ユーザーが存在しない場合
+            UserAlreadyFollowedError: ユーザーがフォローされている場合
+        """
+        # 1. ユーザの存在チェック
+        m_user_instance = M_User.objects.filter(id=user.id, deleted_at__isnull=True).first()
+        if not m_user_instance:
+            raise UserNotFoundError()
+        
+        # 2. フォロー対象ユーザの取得
+        m_target_user_instance = M_User.objects.filter(
+            id=target_user_id,
+            deleted_at__isnull=True
+        ).first()
+        if not m_target_user_instance:
+            raise UserNotFoundError()
+        
+        # 3. フォローインスタンスの取得(重複チェック)
+        t_follow_instance = T_UserFollow.objects.filter(
+            following=user,
+            followed=m_target_user_instance,
+            deleted_at__isnull=True
+        ).first()
+        if t_follow_instance:
+            raise UserAlreadyFollowedError()
+        
+        # 4. フォローインスタンスの作成
+        T_UserFollow.objects.create(
+            following=m_user_instance,
+            followed=m_target_user_instance,
+            created_by=m_user_instance,
+            created_method=kino_id,
+            updated_by=m_user_instance,
+            updated_method=kino_id,
+        )
+    
+    # ------------------------------------------------------------------
+    # ユーザフォロー解除
+    # ------------------------------------------------------------------
+    def user_unfollow(
+        self,
+        date_now: datetime,
+        kino_id: str,
+        user: M_User,
+        target_user_id: uuid.UUID,
+    ) -> None:
+        """
+        ユーザーをフォロー解除する。
+        Args:
+            date_now (datetime): 現在日時
+            kino_id (str): 処理実行ユーザーID
+            user (M_User): フォローするユーザーモデル
+            target_user_id (uuid.UUID): フォローされるユーザーのID
+        Raises:
+            UserNotFoundError: ユーザーが存在しない場合
+            UserAlreadyUnfollowedError: ユーザーがフォローされていない場合
+        """
+        # 1. ユーザの存在チェック
+        m_user_instance = M_User.objects.filter(id=user.id, deleted_at__isnull=True).first()
+        if not m_user_instance:
+            raise UserNotFoundError()
+        
+        # 2. フォロー対象ユーザの取得
+        m_target_user_instance = M_User.objects.filter(
+            id=target_user_id,
+            deleted_at__isnull=True
+        ).first()
+        if not m_target_user_instance:
+            raise UserNotFoundError()
+        
+        # 3. フォローインスタンスの取得(重複チェック)
+        t_follow_instance = T_UserFollow.objects.filter(
+            following=user,
+            followed=m_target_user_instance,
+            deleted_at__isnull=True
+        ).first()
+        if not t_follow_instance:
+            raise UserAlreadyUnfollowedError()
+        
+        # 4. フォローインスタンスの削除
+        t_follow_instance.delete(
+            updated_by=m_user_instance,
+            updated_method=kino_id,
+        )
