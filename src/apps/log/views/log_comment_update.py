@@ -13,16 +13,16 @@ from core.consts import LOG_METHOD
 from core.views import BaseAPIView
 
 # --- ログモジュール ---
-from apps.log.serializers.log_create import LogCreateRequestSerializer
-from apps.log.serializers.log_base import LogFullResponseSerializer
+from apps.log.serializers.log_comment_update import LogCommentUpdateRequestSerializer
+from apps.log.serializers.log_comment_base import LogCommentFullResponseSerializer
 from apps.log.services import LogService
 
-KINO_ID = "log-create"
+KINO_ID = "log-comment-update"
 
 
-class LogCreateView(BaseAPIView):
+class LogCommentUpdateView(BaseAPIView):
     """
-    ログ登録APIクラス
+    コメント更新APIクラス
     Create
         Author: Kato Shogo
     """
@@ -32,7 +32,7 @@ class LogCreateView(BaseAPIView):
     log_service = LogService()
 
     @logging_process_with_sql
-    def post(self, request, *args, **kwargs):
+    def post(self, request, log_id, log_comment_id, *args, **kwargs):
         """
         POSTリクエストを受け付ける。
         Method: POST
@@ -46,7 +46,7 @@ class LogCreateView(BaseAPIView):
             InternalServerError: 想定外エラー
         """
         try:
-            return self.log_create(request, *args, **kwargs)
+            return self.log_comment_update(request, log_id, log_comment_id, *args, **kwargs)
         except ApplicationError:
             # ApplicationError関連はカスタムエラー処理が設定されている為そのまま親へスローする
             raise
@@ -57,11 +57,12 @@ class LogCreateView(BaseAPIView):
             # その他想定外エラーの場合もAPIエラーとする
             raise ApplicationError() from e
 
-    def log_create(self, request, *args, **kwargs):
+    def log_comment_update(self, request, log_id, log_comment_id, *args, **kwargs):
         """
-        ログ登録処理
+        ログコメント更新処理
         Args:
             request:  HTTPリクエスト
+            log_id:   ログID
         """
         date_now: datetime = convert_to_site_timezone(timezone.now())
         # 1. 処理開始ログ出力
@@ -72,19 +73,21 @@ class LogCreateView(BaseAPIView):
         )
 
         # 2. リクエストデータ検証
-        serializer = LogCreateRequestSerializer(data=request.data)
+        serializer = LogCommentUpdateRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        # 3. サービス実行(ログ登録)
-        new_log = self.log_service.create_log(
+        # 3. サービス実行(コメント登録)
+        updated_log_comment = self.log_service.update_log_comment(
             date_now=date_now,
             kino_id=KINO_ID,
             user=request.user,
+            log_id=log_id,
+            log_comment_id=log_comment_id,
             validated_data=serializer.validated_data,
         )
 
         # 4. レスポンス作成
-        res_serializer = LogFullResponseSerializer(new_log)
+        res_serializer = LogCommentFullResponseSerializer(updated_log_comment)
         # get_success_map_responseを使用
         response = self.get_success_map_response(
             data=res_serializer.data,

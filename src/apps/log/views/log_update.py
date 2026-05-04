@@ -1,5 +1,6 @@
 from datetime import datetime
 from django.utils import timezone
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError as DRF_ValidationError
 
@@ -25,6 +26,7 @@ class LogUpdateView(BaseAPIView):
         Author: Kato Shogo
     """
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
     log_service = LogService()
 
     @logging_process_with_sql
