@@ -165,6 +165,16 @@ class T_LogComment(BaseModel):
         # 逆参照名を定義(例: 「参照先インスタンス.[related_name]」/通常参照は「本インスタンス.参照先モデル名(_id)」で取得可能)
         related_name="log_t_log_comment_set",
     )
+    # ユーザマスタ(削除/物理削除の場合はCASCADE)
+    user = models.ForeignKey(
+        "account.M_User",  # 循環参照対策(文字で定義することで、後での紐付けとする)
+        db_column="user_id",
+        verbose_name="ユーザマスタ",
+        db_comment="ユーザマスタ",
+        on_delete=models.CASCADE,
+        # 逆参照名を定義(例: 「参照先インスタンス.[related_name]」/通常参照は「本インスタンス.参照先モデル名(_id)」で取得可能)
+        related_name="user_t_log_comment_set",
+    )
     # 内容
     content = models.TextField(
         db_column="content",

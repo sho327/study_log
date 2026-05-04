@@ -276,9 +276,19 @@ class LogService:
         log_comment_id: str,
     ):
         """特定のコメント詳細を取得する"""
+        # 1. ログの存在確認(存在チェックのみでロックはかけない)
+        try:
+            log = T_Log.objects.get(
+                id=log_id,
+                deleted_at__isnull=True,
+            )
+        except T_Log.DoesNotExist:
+            raise LogNotFoundError()
+
         try:
             return T_LogComment.objects.filter(
-                id=comment_id,
+                id=log_comment_id,
+                log=log,
                 deleted_at__isnull=True,
             ).select_related(
                 "reply_to",
