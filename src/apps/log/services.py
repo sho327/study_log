@@ -364,14 +364,10 @@ class LogService:
         validated_data: dict,
     ):
         """コメントを新規登録する"""
-        # 1. ログの取得(存在チェックとロック)
-        # SELECT * FROM t_log WHERE id = '...' FOR UPDATE; を実行し、トランザクション中のロックを取得する
-        # 「数値を増減させる」「設定を書き換える」など、同時に実行されるとデータが矛盾してしまう可能性がある更新処理の直前に使う
-        # ※コメント中はログの削除をさせない※
+        # 1. ログの存在確認(存在チェックのみでロックはかけない)
         try:
-            log = T_Log.objects.select_for_update().get(
+            log = T_Log.objects.get(
                 id=log_id,
-                user=user,
                 deleted_at__isnull=True,
             )
         except T_Log.DoesNotExist:
@@ -524,14 +520,10 @@ class LogService:
         validated_data: dict,
     ):
         """コメント情報を更新する"""
-        # 1. ログの取得(存在チェックとロック)
-        # SELECT * FROM t_log WHERE id = '...' FOR UPDATE; を実行し、トランザクション中のロックを取得する
-        # 「数値を増減させる」「設定を書き換える」など、同時に実行されるとデータが矛盾してしまう可能性がある更新処理の直前に使う
-        # ※コメント中はログの削除をさせない※
+        # 1. ログの存在確認(存在チェックのみでロックはかけない)
         try:
-            log = T_Log.objects.select_for_update().get(
+            log = T_Log.objects.get(
                 id=log_id,
-                user=user,
                 deleted_at__isnull=True,
             )
         except T_Log.DoesNotExist:
@@ -611,7 +603,7 @@ class LogService:
         log_id: str,
     ):
         """ログを論理削除する"""
-         # 1. ログの取得(存在チェックとロック)
+        # 1. ログの取得(存在チェックとロック)
         # SELECT * FROM t_log WHERE id = '...' FOR UPDATE; を実行し、トランザクション中のロックを取得する
         # 「数値を増減させる」「設定を書き換える」など、同時に実行されるとデータが矛盾してしまう可能性がある更新処理の直前に使う
         try:
@@ -696,14 +688,10 @@ class LogService:
         log_comment_id: str,
     ):
         """コメントを論理削除する"""
-        # 1. ログの取得(存在チェックとロック)
-        # SELECT * FROM t_log WHERE id = '...' FOR UPDATE; を実行し、トランザクション中のロックを取得する
-        # 「数値を増減させる」「設定を書き換える」など、同時に実行されるとデータが矛盾してしまう可能性がある更新処理の直前に使う
-        # ※コメント中はログの削除をさせない※
+        # 1. ログの存在確認(存在チェックのみでロックはかけない)
         try:
-            log = T_Log.objects.select_for_update().get(
+            log = T_Log.objects.get(
                 id=log_id,
-                user=user,
                 deleted_at__isnull=True,
             )
         except T_Log.DoesNotExist:
