@@ -181,6 +181,7 @@ class LogService:
             log_id=log_id,
             deleted_at__isnull=True,
         ).select_related(
+            "user",
             "reply_to",
         ).prefetch_related(
             "log_r_log_comment_attachment_set__file_resource",
@@ -241,7 +242,7 @@ class LogService:
                     "log_t_log_comment_set",
                     queryset=T_LogComment.objects.filter(
                         deleted_at__isnull=True
-                    ).select_related("created_by").prefetch_related(
+                    ).select_related("user").prefetch_related(
                         Prefetch(
                             "log_r_log_comment_attachment_set",
                             queryset=R_LogCommentAttachment.objects.filter(deleted_at__isnull=True).select_related("file_resource")
@@ -386,6 +387,7 @@ class LogService:
         # 2. コメント本体の作成
         log_comment = T_LogComment.objects.create(
             log=log,
+            user=user,
             content=validated_data.get("content", ""),
             reply_to=validated_data.get("reply_to_id", None),
             created_by=user,
@@ -546,6 +548,7 @@ class LogService:
             log_comment = T_LogComment.objects.select_for_update().get(
                 id=log_comment_id, 
                 log=log,
+                user=user,
                 deleted_at__isnull=True
             )
         except T_LogComment.DoesNotExist:
@@ -714,6 +717,7 @@ class LogService:
             log_comment = T_LogComment.objects.select_for_update().get(
                 id=log_comment_id, 
                 log=log,
+                user=user,
                 deleted_at__isnull=True
             )
         except T_LogComment.DoesNotExist:

@@ -64,7 +64,7 @@ class LogCommentMiniResponseSerializer(LogCommentBaseSerializer):
         read_only=True
     )
     # 投稿者情報
-    user = UserMiniResponseSerializer(source="created_by", read_only=True)
+    user = UserMiniResponseSerializer(read_only=True)
 
     # リアクション集計
     # シリアライザで計算するとN+1問題で重くなるため、ReadOnlyFieldとして定義し
@@ -107,7 +107,7 @@ class LogCommentFullResponseSerializer(LogCommentBaseSerializer):
         many=True, 
         read_only=True
     )
-    user = UserMiniResponseSerializer(source="created_by", read_only=True)
+    user = UserMiniResponseSerializer(read_only=True)
 
     # リアクション集計
     # シリアライザで計算するとN+1問題で重くなるため、ReadOnlyFieldとして定義し

@@ -166,8 +166,8 @@ class T_LogCommentAdmin(SimpleHistoryAdmin):
     """
     ログコメントトランの管理設定
     """
-    list_display = ("log", "content_summary", "reply_to", "created_at", "deleted_at")
-    list_filter = (SoftDeleteFilter, "created_at", "deleted_at")
+    list_display = ("log", "user", "content_summary", "reply_to", "created_at", "deleted_at")
+    list_filter = (SoftDeleteFilter, "user", "created_at", "deleted_at")
     search_fields = ("content",)
     readonly_fields = ("id", "created_at", "updated_at")
 
