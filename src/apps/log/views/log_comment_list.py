@@ -1,5 +1,6 @@
 from datetime import datetime
 from django.utils import timezone
+from django.core.paginator import Paginator
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError as DRF_ValidationError
 
@@ -11,23 +12,24 @@ from core.utils.date_format import convert_to_site_timezone
 from core.exceptions.exceptions import ApplicationError, ValidationError
 from core.views import BaseAPIView
 
-# --- APIキーモジュール ---
-from apps.api_key.serializers.api_key_base import ApiKeyFullResponseSerializer
-from apps.api_key.services import ApiKeyService
+# --- ログモジュール ---
+from apps.log.serializers.log_comment_list import LogCommentListRequestSerializer
+from apps.log.serializers.log_comment_base import LogCommentMiniResponseSerializer
+from apps.log.services import LogService
 
-KINO_ID = "api-key-detail"
+KINO_ID = "log-comment-list"
 
-class ApiKeyDetailView(BaseAPIView):
+class LogCommentListView(BaseAPIView):
     """
-    APIキー詳細取得APIクラス
+    ログコメント一覧取得APIクラス
     Create
         Author: Kato Shogo
     """
     permission_classes = [IsAuthenticated]
-    api_key_service = ApiKeyService()
+    log_service = LogService()
 
     @logging_process_with_sql
-    def get(self, request, artist_id, *args, **kwargs):
+    def get(self, request, log_id: str, *args, **kwargs):
         """
         GETリクエストを受け付ける。
         Method: GET
@@ -41,7 +43,7 @@ class ApiKeyDetailView(BaseAPIView):
             InternalServerError: 想定外エラー
         """
         try:
-            return self.api_key_detail(request, api_key_id, *args, **kwargs)
+            return self.log_comment_list(request, log_id, *args, **kwargs)
         except ApplicationError:
             # ApplicationError関連はカスタムエラー処理が設定されている為そのまま親へスローする
             raise
@@ -52,9 +54,9 @@ class ApiKeyDetailView(BaseAPIView):
             # その他想定外エラーの場合もAPIエラーとする
             raise ApplicationError() from e
     
-    def api_key_detail(self, request, api_key_id, *args, **kwargs):
+    def log_comment_list(self, request, log_id: str, *args, **kwargs):
         """
-        APIキー詳細取得処理
+        ログコメント一覧取得処理
         Args:
             request:  HTTPリクエスト
         """
@@ -62,30 +64,45 @@ class ApiKeyDetailView(BaseAPIView):
         # 1. 処理開始ログ出力(GETなのでクエリパラメータを出力)
         log_output_by_msg_id(
             log_id="MSGI003", 
-            params=[KINO_ID, f"ID: {api_key_id}"], 
+            params=[KINO_ID, str(request.query_params)], 
             logger_name=LOG_METHOD.APPLICATION.value
         )
+
+        # 2. リクエストデータ検証
+        # GETなのでrequest.query_paramsを渡す
+        serializer = LogCommentListRequestSerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        # リクエストデータ変数化
+        per_page = serializer.validated_data.get("per_page")
+        page = serializer.validated_data.get("page")
         
-        # 2. サービス実行(APIキー詳細取得)
-        api_key = self.api_key_service.detail_api_key(
+        # 3. サービス実行(一覧データ取得)
+        # Service側で select_related('spotify_image') 等のN+1対策がなされたQuerySetを取得
+        queryset = self.log_service.list_log_comment(
             date_now=date_now,
             kino_id=KINO_ID,
             user=request.user,
-            api_key_id=api_key_id,
+            log_id=log_id,
         )
 
-        # 3. レスポンス作成(Full構成を使用)
-        res_serializer = ApiKeyFullResponseSerializer(api_key)
-        # get_success_map_responseを使用
-        response = self.get_success_map_response(
+        # 4. ページング処理
+        paginator = Paginator(queryset, per_page)
+        page_obj = paginator.get_page(page)
+
+        # 5. レスポンス作成(Mini構成を使用)
+        # many=Trueでリスト形式としてシリアライズ
+        res_serializer = LogCommentMiniResponseSerializer(page_obj.object_list, many=True)
+        # get_success_list_response を使用し、results/countを含む共通フォーマットを生成
+        response = self.get_success_list_response(
             data=res_serializer.data,
+            count=paginator.count
         )
 
-        # 4. 処理終了ログ出力
+        # 6. 処理終了ログ出力
         log_output_by_msg_id(
             log_id="MSGI004", 
-            params=[KINO_ID, str(response.data)], 
+            params=[KINO_ID, f"page: {page}, count: {paginator.count}"], 
             logger_name=LOG_METHOD.APPLICATION.value
         )
-
+        
         return response

@@ -1,5 +1,6 @@
 from datetime import datetime
 from django.utils import timezone
+from django.core.paginator import Paginator
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError as DRF_ValidationError
 
@@ -11,23 +12,23 @@ from core.utils.date_format import convert_to_site_timezone
 from core.exceptions.exceptions import ApplicationError, ValidationError
 from core.views import BaseAPIView
 
-# --- APIキーモジュール ---
-from apps.api_key.serializers.api_key_base import ApiKeyFullResponseSerializer
-from apps.api_key.services import ApiKeyService
+# --- ログモジュール ---
+from apps.log.serializers.log_comment_base import LogCommentFullResponseSerializer
+from apps.log.services import LogService
 
-KINO_ID = "api-key-detail"
+KINO_ID = "log-comment-detail"
 
-class ApiKeyDetailView(BaseAPIView):
+class LogCommentDetailView(BaseAPIView):
     """
-    APIキー詳細取得APIクラス
+    ログコメント詳細取得APIクラス
     Create
         Author: Kato Shogo
     """
     permission_classes = [IsAuthenticated]
-    api_key_service = ApiKeyService()
+    log_service = LogService()
 
     @logging_process_with_sql
-    def get(self, request, artist_id, *args, **kwargs):
+    def get(self, request, log_id: str, log_comment_id: str, *args, **kwargs):
         """
         GETリクエストを受け付ける。
         Method: GET
@@ -41,7 +42,7 @@ class ApiKeyDetailView(BaseAPIView):
             InternalServerError: 想定外エラー
         """
         try:
-            return self.api_key_detail(request, api_key_id, *args, **kwargs)
+            return self.log_comment_detail(request, log_id, log_comment_id, *args, **kwargs)
         except ApplicationError:
             # ApplicationError関連はカスタムエラー処理が設定されている為そのまま親へスローする
             raise
@@ -52,9 +53,9 @@ class ApiKeyDetailView(BaseAPIView):
             # その他想定外エラーの場合もAPIエラーとする
             raise ApplicationError() from e
     
-    def api_key_detail(self, request, api_key_id, *args, **kwargs):
+    def log_comment_detail(self, request, log_id: str, log_comment_id: str, *args, **kwargs):
         """
-        APIキー詳細取得処理
+        ログコメント詳細取得処理
         Args:
             request:  HTTPリクエスト
         """
@@ -62,23 +63,25 @@ class ApiKeyDetailView(BaseAPIView):
         # 1. 処理開始ログ出力(GETなのでクエリパラメータを出力)
         log_output_by_msg_id(
             log_id="MSGI003", 
-            params=[KINO_ID, f"ID: {api_key_id}"], 
+            params=[KINO_ID, f"log_id: {log_id}, log_comment_id: {log_comment_id}"], 
             logger_name=LOG_METHOD.APPLICATION.value
         )
         
-        # 2. サービス実行(APIキー詳細取得)
-        api_key = self.api_key_service.detail_api_key(
+        # 2. サービス実行(一覧データ取得)
+        # Service側で select_related('spotify_image') 等のN+1対策がなされたQuerySetを取得
+        log_comment = self.log_service.detail_log_comment(
             date_now=date_now,
             kino_id=KINO_ID,
             user=request.user,
-            api_key_id=api_key_id,
+            log_id=log_id,
+            log_comment_id=log_comment_id,
         )
 
         # 3. レスポンス作成(Full構成を使用)
-        res_serializer = ApiKeyFullResponseSerializer(api_key)
-        # get_success_map_responseを使用
+        res_serializer = LogCommentFullResponseSerializer(log_comment)
+        # get_success_map_response を使用し、results/countを含む共通フォーマットを生成
         response = self.get_success_map_response(
-            data=res_serializer.data,
+            data=res_serializer.data
         )
 
         # 4. 処理終了ログ出力
@@ -87,5 +90,6 @@ class ApiKeyDetailView(BaseAPIView):
             params=[KINO_ID, str(response.data)], 
             logger_name=LOG_METHOD.APPLICATION.value
         )
-
+        
         return response
+    

@@ -272,7 +272,8 @@ class LogService:
         date_now: datetime,
         kino_id: str,
         user: M_User,
-        comment_id: str,
+        log_id: str,
+        log_comment_id: str,
     ):
         """特定のコメント詳細を取得する"""
         try:

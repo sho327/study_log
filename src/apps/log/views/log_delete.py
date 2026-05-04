@@ -11,25 +11,24 @@ from core.utils.date_format import convert_to_site_timezone
 from core.exceptions.exceptions import ApplicationError, ValidationError
 from core.views import BaseAPIView
 
-# --- APIキーモジュール ---
-from apps.api_key.serializers.api_key_base import ApiKeyFullResponseSerializer
-from apps.api_key.services import ApiKeyService
+# --- ログモジュール ---
+from apps.log.services import LogService
 
-KINO_ID = "api-key-detail"
+KINO_ID = "log-delete"
 
-class ApiKeyDetailView(BaseAPIView):
+class LogDeleteView(BaseAPIView):
     """
-    APIキー詳細取得APIクラス
+    ログ削除APIクラス
     Create
         Author: Kato Shogo
     """
     permission_classes = [IsAuthenticated]
-    api_key_service = ApiKeyService()
+    log_service = LogService()
 
     @logging_process_with_sql
-    def get(self, request, artist_id, *args, **kwargs):
+    def delete(self, request, log_id, *args, **kwargs):
         """
-        GETリクエストを受け付ける。
+        DELETEリクエストを受け付ける。
         Method: GET
         Args:
             request:  HTTPリクエスト
@@ -41,7 +40,7 @@ class ApiKeyDetailView(BaseAPIView):
             InternalServerError: 想定外エラー
         """
         try:
-            return self.api_key_detail(request, api_key_id, *args, **kwargs)
+            return self.log_delete(request, log_id, *args, **kwargs)
         except ApplicationError:
             # ApplicationError関連はカスタムエラー処理が設定されている為そのまま親へスローする
             raise
@@ -52,9 +51,9 @@ class ApiKeyDetailView(BaseAPIView):
             # その他想定外エラーの場合もAPIエラーとする
             raise ApplicationError() from e
     
-    def api_key_detail(self, request, api_key_id, *args, **kwargs):
+    def log_delete(self, request, log_id, *args, **kwargs):
         """
-        APIキー詳細取得処理
+        ログ削除処理
         Args:
             request:  HTTPリクエスト
         """
@@ -62,30 +61,27 @@ class ApiKeyDetailView(BaseAPIView):
         # 1. 処理開始ログ出力(GETなのでクエリパラメータを出力)
         log_output_by_msg_id(
             log_id="MSGI003", 
-            params=[KINO_ID, f"ID: {api_key_id}"], 
+            params=[KINO_ID, f"ID: {log_id}"], 
             logger_name=LOG_METHOD.APPLICATION.value
         )
         
-        # 2. サービス実行(APIキー詳細取得)
-        api_key = self.api_key_service.detail_api_key(
+        # 2. サービス実行(ログ削除)
+        self.log_service.delete_log(
             date_now=date_now,
             kino_id=KINO_ID,
             user=request.user,
-            api_key_id=api_key_id,
+            log_id=log_id,
         )
 
-        # 3. レスポンス作成(Full構成を使用)
-        res_serializer = ApiKeyFullResponseSerializer(api_key)
-        # get_success_map_responseを使用
-        response = self.get_success_map_response(
-            data=res_serializer.data,
-        )
+        # 3. レスポンス作成
+        # get_success_map_responseを使用(実行日時を含む空のマップを返却)
+        response = self.get_success_map_response(data={})
 
         # 4. 処理終了ログ出力
         log_output_by_msg_id(
             log_id="MSGI004", 
-            params=[KINO_ID, str(response.data)], 
+            params=[KINO_ID, f"Deleted ID: {log_id}"], 
             logger_name=LOG_METHOD.APPLICATION.value
         )
-
+        
         return response
