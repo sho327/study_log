@@ -8,6 +8,8 @@ from .views.account_activate import AccountActivateView
 from .views.password_reset import PasswordResetView
 from .views.password_reset_confirm import PasswordResetConfirmView
 from .views.account_withdraw import AccountWithdrawView
+from .views.user_follow import UserFollowView
+from .views.user_unfollow import UserUnfollowView
 
 app_name = "account"
 
@@ -19,4 +21,6 @@ urlpatterns = [
     path('password_reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     path('account_activate/', AccountActivateView.as_view(), name='account_activate'),
     path('account_withdraw/', AccountWithdrawView.as_view(), name='account_withdraw'),
+    path('user_follow/<str:target_user_id>/', UserFollowView.as_view(), name='user_follow'),
+    path('user_unfollow/<str:target_user_id>/', UserUnfollowView.as_view(), name='user_unfollow'),
 ]
