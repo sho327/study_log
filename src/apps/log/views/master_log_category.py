@@ -11,23 +11,25 @@ from core.exceptions.exceptions import ApplicationError, ValidationError
 from core.views import CommonResponseMixin
 
 # --- ログモジュール ---
-from apps.log.models import M_LogTheme
-from apps.log.serializers.master_log_theme_base import MasterLogThemeMiniResponseSerializer
+from apps.log.models import M_LogCategory
+from apps.log.serializers.master_log_category_base import MasterLogCategoryMiniResponseSerializer
 
-KINO_ID_BASE = "master-log-themes"
+KINO_ID_BASE = "master-log-categories"
 
-class M_LogThemeViewSet(CommonResponseMixin, viewsets.ModelViewSet):
+class M_LogCategoryViewSet(CommonResponseMixin, viewsets.ModelViewSet):
     """
-    APIキースコープマスタ CRUD ViewSet
+    ログカテゴリマスタ CRUD ViewSet
     """
-    serializer_class = MasterApiKeyScopeMiniResponseSerializer
+    serializer_class = MasterLogCategoryMiniResponseSerializer
 
     # ------------------------------------------------------------------
     # Django標準メソッドのオーバーライド
     # ------------------------------------------------------------------
     def get_queryset(self):
         # 有効な(論理削除されていない)スコープのみを返す
-        return M_ApiKeyScope.objects.filter(deleted_at__isnull=True).order_by('code')
+        return M_LogCategory.objects.filter(
+            deleted_at__isnull=True
+        ).order_by('code')
     
     def perform_create(self, serializer):
         serializer.save(
@@ -43,7 +45,7 @@ class M_LogThemeViewSet(CommonResponseMixin, viewsets.ModelViewSet):
             updated_method=f"{KINO_ID_BASE}_update"
         )
     
-    def perform_destroy(self, instance: M_ApiKeyScope):
+    def perform_destroy(self, instance: M_LogCategory):
         """物理削除を論理削除に書き換える"""
         instance.updated_by=self.request.user
         instance.updated_method=f"{KINO_ID_BASE}_delete"
@@ -51,35 +53,35 @@ class M_LogThemeViewSet(CommonResponseMixin, viewsets.ModelViewSet):
         instance.save()
 
     # ------------------------------------------------------------------
-    # 一覧取得 (GET /master_api_key_scopes/)
+    # 一覧取得 (GET /master_log_categories/)
     # ------------------------------------------------------------------
     @logging_process_with_sql
     def list(self, request, *args, **kwargs):
         return self._execute_action(super().list, request, *args, **kwargs)
 
     # ------------------------------------------------------------------
-    # 登録 (POST /master_api_key_scopes/)
+    # 登録 (POST /master_log_categories/)
     # ------------------------------------------------------------------
     @logging_process_with_sql
     def create(self, request, *args, **kwargs):
         return self._execute_action(super().create, request, *args, **kwargs)
 
     # ------------------------------------------------------------------
-    # 詳細取得 (GET /master_api_key_scopes/{id}/)
+    # 詳細取得 (GET /master_log_categories/{id}/)
     # ------------------------------------------------------------------
     @logging_process_with_sql
     def retrieve(self, request, *args, **kwargs):
         return self._execute_action(super().retrieve, request, *args, **kwargs)
 
     # ------------------------------------------------------------------
-    # 更新 (PUT/PATCH /master_api_key_scopes/{id}/)
+    # 更新 (PUT/PATCH /master_log_categories/{id}/)
     # ------------------------------------------------------------------
     @logging_process_with_sql
     def update(self, request, *args, **kwargs):
         return self._execute_action(super().update, request, *args, **kwargs)
 
     # ------------------------------------------------------------------
-    # 削除 (DELETE /master_api_key_scopes/{id}/)
+    # 削除 (DELETE /master_log_categories/{id}/)
     # ------------------------------------------------------------------
     @logging_process_with_sql
     def destroy(self, request, *args, **kwargs):

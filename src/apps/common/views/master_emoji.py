@@ -27,7 +27,9 @@ class M_EmojiViewSet(CommonResponseMixin, viewsets.ModelViewSet):
     # ------------------------------------------------------------------
     def get_queryset(self):
         # 有効な(論理削除されていない)絵文字のみを返す
-        return M_Emoji.objects.filter(deleted_at__isnull=True).order_by('code')
+        return M_Emoji.objects.filter(
+            deleted_at__isnull=True
+        ).order_by('code')
     
     def perform_create(self, serializer):
         serializer.save(

@@ -27,7 +27,9 @@ class M_ApiKeyScopeViewSet(CommonResponseMixin, viewsets.ModelViewSet):
     # ------------------------------------------------------------------
     def get_queryset(self):
         # 有効な（論理削除されていない）スコープのみを返す
-        return M_ApiKeyScope.objects.filter(deleted_at__isnull=True).order_by('code')
+        return M_ApiKeyScope.objects.filter(
+            deleted_at__isnull=True
+        ).order_by('code')
     
     def perform_create(self, serializer):
         serializer.save(

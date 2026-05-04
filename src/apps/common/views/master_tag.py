@@ -27,7 +27,9 @@ class M_TagViewSet(CommonResponseMixin, viewsets.ModelViewSet):
     # ------------------------------------------------------------------
     def get_queryset(self):
         # 有効な(論理削除されていない)タグのみを返す
-        return M_Tag.objects.filter(deleted_at__isnull=True).order_by('name')
+        return M_Tag.objects.filter(
+            deleted_at__isnull=True
+        ).order_by('name')
     
     def perform_create(self, serializer):
         serializer.save(
