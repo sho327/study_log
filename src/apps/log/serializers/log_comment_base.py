@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 # --- アカウントモジュール ---
-from apps.account.serializers.account_base import AccountMiniResponseSerializer
+from apps.account.serializers.account_base import UserMiniResponseSerializer
 
 # --- 共通モジュール ---
 from apps.common.models import M_Emoji
@@ -64,7 +64,7 @@ class LogCommentMiniResponseSerializer(LogCommentBaseSerializer):
         read_only=True
     )
     # 投稿者情報
-    user = AccountMiniResponseSerializer(source="created_by", read_only=True)
+    user = UserMiniResponseSerializer(source="created_by", read_only=True)
 
     # リアクション集計
     # シリアライザで計算するとN+1問題で重くなるため、ReadOnlyFieldとして定義し
@@ -107,7 +107,7 @@ class LogCommentFullResponseSerializer(LogCommentBaseSerializer):
         many=True, 
         read_only=True
     )
-    user = AccountMiniResponseSerializer(source="created_by", read_only=True)
+    user = UserMiniResponseSerializer(source="created_by", read_only=True)
 
     # リアクション集計
     # シリアライザで計算するとN+1問題で重くなるため、ReadOnlyFieldとして定義し

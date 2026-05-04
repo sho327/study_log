@@ -12,6 +12,9 @@ from apps.common.urls import router as common_router
 # --- APIキーモジュール ---
 from apps.api_key.urls import router as api_key_router
 
+# --- ログモジュール ---
+from apps.log.urls import router as log_router
+
 BASE_API_PATH = "api/v1"
 
 urlpatterns = [
@@ -26,6 +29,9 @@ urlpatterns = [
     # APIキー機能
     path(f"{BASE_API_PATH}/api-keys/", include(api_key_router.urls)),
     path(f"{BASE_API_PATH}/api-keys/", include("apps.api_key.urls")),
+    # ログ機能
+    path(f"{BASE_API_PATH}/log/", include(log_router.urls)),
+    path(f"{BASE_API_PATH}/log/", include("apps.log.urls")),
 ]
 
 # 開発環境のみ、メディアファイルを配信する設定を追加

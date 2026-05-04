@@ -1,8 +1,8 @@
 import os
 from datetime import datetime
 from typing import List, Optional, Union
-from django.db import transaction, Prefetch
-from django.db.models import Count, Q, QuerySet
+from django.db import transaction
+from django.db.models import Count, Q, QuerySet, Prefetch
 from collections import defaultdict
 
 # --- アカウントモジュール ---
@@ -109,7 +109,6 @@ class LogService:
     ):
         """フィルタリングを考慮したログ一覧を取得する"""
         queryset = T_Log.objects.filter(
-            user=user,
             deleted_at__isnull=True,
         ).select_related(
             "log_theme",
@@ -135,6 +134,9 @@ class LogService:
         )
 
         # フィルタリング
+        # 自分のログのみを取得するかどうか
+        if validated_data.get("mine", False):
+            queryset = queryset.filter(user=user)
         if validated_data.get("date_from"):
             queryset = queryset.filter(date__gte=validated_data["date_from"])
         if validated_data.get("date_to"):
@@ -210,7 +212,6 @@ class LogService:
         try:
             return T_Log.objects.filter(
                 id=log_id,
-                user=user,
                 deleted_at__isnull=True,
             ).select_related(
                 "log_theme",

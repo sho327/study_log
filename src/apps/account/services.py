@@ -25,8 +25,10 @@ from apps.account.exceptions import (
     UserAlreadyActiveError,
     UserNotFoundError,
     ProfileNotFoundError,
+    UserAlreadyFollowedError,
+    UserAlreadyUnfollowedError,
 )
-from apps.account.models import M_User, T_UserToken, T_LoginHistory, T_Profile
+from apps.account.models import M_User, T_UserToken, T_LoginHistory, T_Profile, R_Follow
 
 
 User: M_User = get_user_model()
@@ -655,18 +657,18 @@ class AccountService:
             raise UserNotFoundError()
         
         # 3. フォローインスタンスの取得(重複チェック)
-        t_follow_instance = T_UserFollow.objects.filter(
-            following=user,
-            followed=m_target_user_instance,
+        r_follow_instance = R_Follow.objects.filter(
+            follower=m_user_instance,
+            followee=m_target_user_instance,
             deleted_at__isnull=True
         ).first()
-        if t_follow_instance:
+        if r_follow_instance:
             raise UserAlreadyFollowedError()
         
         # 4. フォローインスタンスの作成
-        T_UserFollow.objects.create(
-            following=m_user_instance,
-            followed=m_target_user_instance,
+        R_Follow.objects.create(
+            follower=m_user_instance,
+            followee=m_target_user_instance,
             created_by=m_user_instance,
             created_method=kino_id,
             updated_by=m_user_instance,
@@ -708,16 +710,16 @@ class AccountService:
             raise UserNotFoundError()
         
         # 3. フォローインスタンスの取得(重複チェック)
-        t_follow_instance = T_UserFollow.objects.filter(
-            following=user,
-            followed=m_target_user_instance,
+        r_follow_instance = R_Follow.objects.filter(
+            follower=m_user_instance,
+            followee=m_target_user_instance,
             deleted_at__isnull=True
         ).first()
-        if not t_follow_instance:
+        if not r_follow_instance:
             raise UserAlreadyUnfollowedError()
         
         # 4. フォローインスタンスの削除
-        t_follow_instance.delete(
-            updated_by=m_user_instance,
-            updated_method=kino_id,
-        )
+        r_follow_instance.updated_by = m_user_instance
+        r_follow_instance.updated_method = kino_id
+        r_follow_instance.deleted_at = date_now
+        r_follow_instance.save()

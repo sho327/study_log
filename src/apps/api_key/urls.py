@@ -17,6 +17,8 @@ router.register("master_api_key_scopes", M_ApiKeyScopeViewSet, basename='master_
 urlpatterns = [
     # ViewSet関連のURL(CRUD一括)
     path('', include(router.urls)),
+    # 個別APIキー関連
+    path('list/', ApiKeyListView.as_view(), name='api_key_list'),
     path('create/', ApiKeyCreateView.as_view(), name='api_key_create'),
     path('<uuid:api_key_id>/', ApiKeyDetailView.as_view(), name='api_key_detail'),
     path('<uuid:api_key_id>/update/', ApiKeyUpdateView.as_view(), name='api_key_update'),

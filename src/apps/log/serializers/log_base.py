@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 # --- アカウントモジュール ---
-from apps.account.serializers.account_base import AccountMiniResponseSerializer
+from apps.account.serializers.account_base import UserMiniResponseSerializer
 
 # --- 共通モジュール ---
 from apps.common.models import M_Emoji
@@ -13,6 +13,7 @@ from apps.common.serializers.master_emoji_base import MasterEmojiMiniResponseSer
 from apps.log.models import T_Log
 from apps.log.serializers.master_log_theme_base import MasterLogThemeMiniResponseSerializer
 from apps.log.serializers.master_log_category_base import MasterLogCategoryMiniResponseSerializer
+from apps.log.serializers.log_comment_base import LogCommentMiniResponseSerializer
 
 
 class LogBaseSerializer(serializers.ModelSerializer):
@@ -75,7 +76,7 @@ class LogMiniResponseSerializer(LogBaseSerializer):
     tags = serializers.SerializerMethodField()
     
     # 投稿者情報
-    user = AccountMiniResponseSerializer(read_only=True)
+    user = UserMiniResponseSerializer(read_only=True)
 
     # 集計情報の展開
     # シリアライザで計算するとN+1問題で重くなるため、ReadOnlyFieldとして定義し
@@ -139,7 +140,7 @@ class LogFullResponseSerializer(LogBaseSerializer):
     # タグの展開(モデルのpropertyを使用)
     tags = serializers.SerializerMethodField()
     # 投稿者情報
-    user = AccountMiniResponseSerializer(read_only=True)
+    user = UserMiniResponseSerializer(read_only=True)
 
 
     # 集計情報の展開

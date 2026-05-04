@@ -12,7 +12,7 @@ from core.exceptions.exceptions import ApplicationError, ValidationError
 from core.views import BaseAPIView
 
 # --- アカウントモジュール ---
-from apps.account.services.me.account_service import AccountService
+from apps.account.services import AccountService
 
 
 KINO_ID = "user-follow"
